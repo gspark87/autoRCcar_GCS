@@ -38,7 +38,15 @@ class NavStatusPanel extends StatelessWidget {
           const SizedBox(height: 12),
           _divider(),
           const SizedBox(height: 8),
-          // GPS 위치 표시
+          // Origin 표시
+          if (ctrl.hasOrigin) ...[
+            _sectionTitle('ORIGIN (ECEF→LLH)'),
+            const SizedBox(height: 6),
+            _gpsRow('Lat', ctrl.originLatDeg ?? 0),
+            _gpsRow('Lon', ctrl.originLonDeg ?? 0),
+            const SizedBox(height: 8),
+          ],
+          // 차량 GPS 위치 표시
           if (ctrl.vehiclePosition != null) ...[
             _sectionTitle('GPS POSITION'),
             const SizedBox(height: 6),

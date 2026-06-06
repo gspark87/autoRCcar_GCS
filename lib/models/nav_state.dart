@@ -25,21 +25,30 @@ class Quaternion {
 }
 
 class NavState {
-  final Vec3 position;   // ENU [m]
-  final Vec3 velocity;   // ENU [m/s]
-  final Quaternion quaternion; // w,x,y,z
+  final Vec3 origin;         // ECEF [m]
+  final Vec3 position;       // ENU [m]
+  final Vec3 velocity;       // ENU [m/s]
+  final Quaternion quaternion;
+  final Vec3 acceleration;
+  final Vec3 angularVelocity;
 
   const NavState({
+    required this.origin,
     required this.position,
     required this.velocity,
     required this.quaternion,
+    required this.acceleration,
+    required this.angularVelocity,
   });
 
   factory NavState.fromRosMsg(Map<String, dynamic> msg) {
     return NavState(
+      origin: Vec3.fromMap(msg['origin'] ?? {}),
       position: Vec3.fromMap(msg['position'] ?? {}),
       velocity: Vec3.fromMap(msg['velocity'] ?? {}),
       quaternion: Quaternion.fromMap(msg['quaternion'] ?? {}),
+      acceleration: Vec3.fromMap(msg['acceleration'] ?? {}),
+      angularVelocity: Vec3.fromMap(msg['angular_velocity'] ?? {}),
     );
   }
 }

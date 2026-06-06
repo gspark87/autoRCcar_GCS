@@ -323,7 +323,7 @@ class _MainScreenState extends State<MainScreen> {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
-                '⚠ Origin을 먼저 설정하세요 (우측 패널)',
+                '⚠ ROS2 연결 후 Origin 자동 설정됩니다',
                 style: TextStyle(color: Colors.white, fontSize: 11),
               ),
             ),

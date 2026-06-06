@@ -89,3 +89,41 @@ double deg2rad(double deg) => deg * pi / 180.0;
 
 /// rad → deg
 double rad2deg(double rad) => rad * 180.0 / pi;
+
+/// ECEF XYZ [m] → LLH (lat/lon rad, height m)
+/// user_geometry.py xyz2llh 포팅
+List<double> xyz2llh(List<double> xyz) {
+  double x = xyz[0];
+  double y = xyz[1];
+  double z = xyz[2];
+
+  const double aa = 6378317.0;
+  const double bb = 6356752.3142;
+  const double ee = 0.0818191908426;
+
+  double b2 = bb * bb;
+  double e2 = ee * ee;
+  double ep = ee * (aa / bb);
+  double rr = sqrt(x * x + y * y);
+  double r2 = rr * rr;
+  double E2 = aa * aa - bb * bb;
+  double FF = 54 * b2 * z * z;
+  double GG = r2 + (1 - e2) * z * z - e2 * E2;
+  double cc = (e2 * e2 * FF * r2) / (GG * GG * GG);
+  double ss = pow(1 + cc + sqrt(cc * cc + 2 * cc), 1 / 3.0).toDouble();
+  double PP = FF / (3 * pow(ss + 1 / ss + 1, 2) * GG * GG);
+  double QQ = sqrt(1 + 2 * e2 * e2 * PP);
+  double ro = -(PP * e2 * rr) / (1 + QQ) +
+      sqrt((aa * aa / 2) * (1 + 1 / QQ) -
+          (PP * (1 - e2) * z * z) / (QQ * (1 + QQ)) -
+          PP * r2 / 2);
+  double tmp = (rr - e2 * ro) * (rr - e2 * ro);
+  double UU = sqrt(tmp + z * z);
+  double VV = sqrt(tmp + (1 - e2) * z * z);
+  double zo = (b2 * z) / (aa * VV);
+  double hei = UU * (1 - b2 / (aa * VV));
+  double lat = atan((z + ep * ep * zo) / rr);
+  double lon = atan2(y, x);
+
+  return [lat, lon, hei]; // rad, rad, m
+}

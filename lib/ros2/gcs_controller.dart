@@ -1,8 +1,5 @@
 // lib/ros2/gcs_controller.dart
-// main.py GcsController 의 Dart 포팅
-// ROS2 ↔ GUI 사이의 비즈니스 로직
 
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/nav_state.dart';
@@ -22,9 +19,13 @@ class GcsController extends ChangeNotifier {
   bool isTeleop = false;
 
   // ── 지도 원점 (LLH rad) ─────────────────────────────────
-  // 첫 nav_topic 수신 시 자동 설정, 또는 수동 설정
+  // nav_topic의 origin (ECEF) 첫 수신 시 자동 설정
   List<double>? _originLLH;
   bool get hasOrigin => _originLLH != null;
+
+  // origin의 위경도 (표시용)
+  double? originLatDeg;
+  double? originLonDeg;
 
   // ── 차량 위치 (지도) ─────────────────────────────────────
   LatLng? vehiclePosition;
@@ -60,7 +61,7 @@ class GcsController extends ChangeNotifier {
   void _onNavState(NavState msg) {
     navState = msg;
 
-    // Euler 변환
+    // Euler 변환 (w,x,y,z 순서)
     final euler = quat2euler([
       msg.quaternion.w,
       msg.quaternion.x,
@@ -71,9 +72,21 @@ class GcsController extends ChangeNotifier {
     pitchDeg = rad2deg(euler[1]);
     yawDeg = rad2deg(euler[2]);
 
-    // 원점 자동 설정 (첫 수신 시)
-    // 주의: nav_topic position은 ENU [m] 이므로
-    // 원점 LLH가 없으면 지도 표시 불가 → 수동 설정 필요
+    // ── Origin 자동 설정 ──────────────────────────────────
+    // nav_topic의 origin (ECEF XYZ) → LLH 변환
+    // ECEF가 (0,0,0)이 아닌 경우에만 유효한 값으로 판단
+    final ecef = [msg.origin.x, msg.origin.y, msg.origin.z];
+    final ecefNorm = ecef[0] * ecef[0] + ecef[1] * ecef[1] + ecef[2] * ecef[2];
+
+    if (_originLLH == null && ecefNorm > 1e6) {
+      // ECEF → LLH 변환
+      final llh = xyz2llh(ecef);
+      _originLLH = llh;
+      originLatDeg = rad2deg(llh[0]);
+      originLonDeg = rad2deg(llh[1]);
+    }
+
+    // ── 차량 위치 업데이트 ────────────────────────────────
     if (_originLLH != null) {
       final enu = [msg.position.x, msg.position.y, msg.position.z];
       final llh = enu2llh(enu, _originLLH!);
@@ -90,22 +103,21 @@ class GcsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── 원점 설정 ─────────────────────────────────────────────
-
-  /// 지도에서 origin 수동 설정 (위경도 deg)
+  // ── 원점 수동 설정 (지도 클릭) ────────────────────────────
   void setOrigin(LatLng latLng, {double altitude = 0}) {
     _originLLH = [
       deg2rad(latLng.latitude),
       deg2rad(latLng.longitude),
       altitude,
     ];
+    originLatDeg = latLng.latitude;
+    originLonDeg = latLng.longitude;
     trajectory.clear();
     notifyListeners();
   }
 
   // ── Waypoint 관리 ─────────────────────────────────────────
 
-  /// 지도 클릭 → Waypoint 추가
   void addWaypoint(LatLng latLng) {
     double ex = 0, ey = 0;
     if (_originLLH != null) {
@@ -119,7 +131,6 @@ class GcsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Waypoint 삭제 (index)
   void removeWaypoint(int index) {
     if (index >= 0 && index < waypoints.length) {
       waypoints.removeAt(index);
@@ -128,7 +139,6 @@ class GcsController extends ChangeNotifier {
     }
   }
 
-  /// 전체 초기화
   void clearAll() {
     waypoints.clear();
     splinePath.clear();
@@ -143,15 +153,10 @@ class GcsController extends ChangeNotifier {
       splinePath.clear();
       return;
     }
-
     final xPts = waypoints.map((w) => w.x).toList();
     final yPts = waypoints.map((w) => w.y).toList();
     final result = calculateCubicSplinePath(xPts, yPts, ds: 0.5);
-
-    if (result == null) {
-      splinePath.clear();
-      return;
-    }
+    if (result == null) { splinePath.clear(); return; }
 
     splinePath = [];
     for (int i = 0; i < result.x.length; i++) {
@@ -164,7 +169,6 @@ class GcsController extends ChangeNotifier {
 
   void sendStart() => _ros.publishCommand(1);
   void sendStop() => _ros.publishCommand(0);
-
   void sendSetYaw(double yaw) => _ros.publishSetYaw(yaw);
 
   void sendGlobalPath() {
@@ -173,9 +177,8 @@ class GcsController extends ChangeNotifier {
     _ros.publishGlobalPath(pathList);
   }
 
-  // ── Import / Export (ENU txt) ─────────────────────────────
+  // ── Import / Export ───────────────────────────────────────
 
-  /// txt 파일 내용(문자열) 파싱 → waypoint 로드
   void importPathFromText(String content) {
     if (_originLLH == null) return;
     waypoints.clear();
@@ -198,7 +201,6 @@ class GcsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// waypoint → txt 형식 문자열 export
   String exportPathToText() {
     return waypoints.map((w) => '${w.x} ${w.y}').join('\n');
   }
