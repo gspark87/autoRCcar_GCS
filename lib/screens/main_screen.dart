@@ -202,7 +202,7 @@ class _MainScreenState extends State<MainScreen> {
               Polyline(
                 points: ctrl.waypoints.map((w) => w.latLng).toList(),
                 strokeWidth: 1.0,
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.black.withOpacity(0.8),
               ),
             ],
           ),
