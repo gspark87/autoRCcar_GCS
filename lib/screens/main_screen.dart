@@ -190,7 +190,7 @@ class _MainScreenState extends State<MainScreen> {
               Polyline(
                 points: ctrl.trajectory,
                 strokeWidth: 2.5,
-                color: Colors.yellowAccent.withOpacity(0.8),
+                color: Colors.blueAccent.withOpacity(0.8),
               ),
             ],
           ),
@@ -264,7 +264,7 @@ class _MainScreenState extends State<MainScreen> {
                   angle: _yawToMapAngle(ctrl.yawDeg),
                   child: const Icon(
                     Icons.navigation,
-                    color: Colors.yellowAccent,
+                    color: Colors.blueAccent,
                     size: 32,
                     shadows: [Shadow(color: Colors.black, blurRadius: 4)],
                   ),
