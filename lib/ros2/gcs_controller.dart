@@ -95,7 +95,7 @@ class GcsController extends ChangeNotifier {
       final llh = enu2llh(enu, _originLLH!);
       vehiclePosition = LatLng(rad2deg(llh[0]), rad2deg(llh[1]));
       trajectory.add(vehiclePosition!);
-      if (trajectory.length > 2000) trajectory.removeAt(0);
+      // if (trajectory.length > 2000) trajectory.removeAt(0); 
     }
 
     notifyListeners();
