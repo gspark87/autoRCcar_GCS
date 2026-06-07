@@ -47,12 +47,12 @@ class NavStatusPanel extends StatelessWidget {
             const SizedBox(height: 8),
           ],
           // 차량 GPS 위치 표시
-          if (ctrl.vehiclePosition != null) ...[
-            _sectionTitle('GPS POSITION'),
-            const SizedBox(height: 6),
-            _gpsRow('Lat', ctrl.vehiclePosition!.latitude),
-            _gpsRow('Lon', ctrl.vehiclePosition!.longitude),
-          ],
+          // if (ctrl.vehiclePosition != null) ...[
+          //   _sectionTitle('GPS POSITION'),
+          //   const SizedBox(height: 6),
+          //   _gpsRow('Lat', ctrl.vehiclePosition!.latitude),
+          //   _gpsRow('Lon', ctrl.vehiclePosition!.longitude),
+          // ],
         ],
       ),
     );
@@ -91,47 +91,53 @@ class NavStatusPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          ...fields.map((f) => _navRow(f.$1, f.$2, color)),
+          Row(
+            children: fields.map((f) => Expanded(
+              child: _navRow(f.$1, f.$2, color),
+            )).toList(),
+          ),
         ],
       ),
     );
   }
 
-  Widget _navRow(String label, double value, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 40,
+Widget _navRow(String label, double value, Color color) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(child: Container()),
+        SizedBox(
+          width: 30,
+          child: Text(
+            label,
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+        ),
+        SizedBox(
+          width: 70, // 원하는 너비로 조정
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(3),
+            ),
             child: Text(
-              label,
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.4),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: Text(
-                value.toStringAsFixed(4),
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  color: color.withOpacity(0.9),
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w500,
-                ),
+              value.toStringAsFixed(2),
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: color.withOpacity(0.9),
+                fontSize: 12,
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _gpsRow(String label, double value) {
     return Padding(

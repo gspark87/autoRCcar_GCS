@@ -30,9 +30,9 @@ class _MainScreenState extends State<MainScreen> {
       appBar: _buildAppBar(ctrl),
       body: Row(
         children: [
-          // ── 지도 영역 (70%) ─────────────────────────────
+          // ── 지도 영역 (60%) ─────────────────────────────
           Expanded(
-            flex: 7,
+            flex: 6,
             child: Stack(
               children: [
                 _buildMap(ctrl),
@@ -40,9 +40,9 @@ class _MainScreenState extends State<MainScreen> {
               ],
             ),
           ),
-          // ── 우측 패널 (30%) ─────────────────────────────
+          // ── 우측 패널 (40%) ─────────────────────────────
           Container(
-            width: 300,
+            width: 380,
             color: const Color(0xFF16213E),
             child: Column(
               children: [
@@ -274,63 +274,107 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Widget _buildMapOverlay(GcsController ctrl) {
-    return Positioned(
-      bottom: 16,
-      left: 16,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Origin 설정 모드 배너
-          if (_isSettingOrigin)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(8),
+Widget _buildMapOverlay(GcsController ctrl) {
+  return Stack(
+    children: [
+      // 좌측 하단 오버레이
+      Positioned(
+        bottom: 16,
+        left: 16,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_isSettingOrigin)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.touch_app, color: Colors.white, size: 16),
+                    SizedBox(width: 6),
+                    Text(
+                      '지도를 클릭하여 Origin 설정',
+                      style: TextStyle(color: Colors.white, fontSize: 13),
+                    ),
+                  ],
+                ),
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.touch_app, color: Colors.white, size: 16),
-                  SizedBox(width: 6),
-                  Text(
-                    '지도를 클릭하여 Origin 설정',
-                    style: TextStyle(color: Colors.white, fontSize: 13),
-                  ),
-                ],
+            if (!_isSettingOrigin && ctrl.hasOrigin)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '좌클릭: Waypoint 추가  |  우클릭: 삭제  |  ${ctrl.waypoints.length}개',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11),
+                ),
               ),
-            ),
-          // Waypoint 힌트
-          if (!_isSettingOrigin && ctrl.hasOrigin)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(6),
+            if (!ctrl.hasOrigin && !_isSettingOrigin)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  '⚠ ROS2 연결 후 Origin 자동 설정됩니다',
+                  style: TextStyle(color: Colors.white, fontSize: 11),
+                ),
               ),
-              child: Text(
-                '좌클릭: Waypoint 추가  |  우클릭: 삭제  |  ${ctrl.waypoints.length}개',
-                style: const TextStyle(color: Colors.white70, fontSize: 11),
-              ),
-            ),
-          if (!ctrl.hasOrigin && !_isSettingOrigin)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text(
-                '⚠ ROS2 연결 후 Origin 자동 설정됩니다',
-                style: TextStyle(color: Colors.white, fontSize: 11),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
+      // 우측 상단 GPS 표시
+      if (ctrl.vehiclePosition != null)
+        Positioned(
+          top: 16,
+          right: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.6),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text(
+                  'GPS POSITION',
+                  style: TextStyle(
+                      color: Colors.white54,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Lat: ${ctrl.vehiclePosition!.latitude.toStringAsFixed(7)}',
+                  style: const TextStyle(
+                      color: Colors.lightBlueAccent,
+                      fontSize: 12,
+                      fontFamily: 'monospace'),
+                ),
+                Text(
+                  'Lon: ${ctrl.vehiclePosition!.longitude.toStringAsFixed(7)}',
+                  style: const TextStyle(
+                      color: Colors.lightBlueAccent,
+                      fontSize: 12,
+                      fontFamily: 'monospace'),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
+}
 
   double _yawToMapAngle(double yawDeg) {
     // yaw: 북쪽 기준 시계방향 [deg] → 지도 회전각 [rad]
