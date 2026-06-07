@@ -22,6 +22,16 @@ class _MainScreenState extends State<MainScreen> {
   bool _isSettingOrigin = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<GcsController>().onOriginSet = (latLng) {
+        _mapController.move(latLng, 18);
+      };
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ctrl = context.watch<GcsController>();
 

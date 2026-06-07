@@ -27,6 +27,8 @@ class GcsController extends ChangeNotifier {
   double? originLatDeg;
   double? originLonDeg;
 
+  Function(LatLng)? onOriginSet;
+
   // ── 차량 위치 (지도) ─────────────────────────────────────
   LatLng? vehiclePosition;
   List<LatLng> trajectory = [];
@@ -84,6 +86,7 @@ class GcsController extends ChangeNotifier {
       _originLLH = llh;
       originLatDeg = rad2deg(llh[0]);
       originLonDeg = rad2deg(llh[1]);
+      onOriginSet?.call(LatLng(originLatDeg!, originLonDeg!));
     }
 
     // ── 차량 위치 업데이트 ────────────────────────────────
