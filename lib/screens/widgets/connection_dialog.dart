@@ -1,6 +1,7 @@
 // lib/screens/widgets/connection_dialog.dart
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ConnectionDialog extends StatefulWidget {
   final Function(String host, int port) onConnect;
@@ -12,8 +13,28 @@ class ConnectionDialog extends StatefulWidget {
 }
 
 class _ConnectionDialogState extends State<ConnectionDialog> {
-  final _hostCtrl = TextEditingController(text: 'localhost');
+  final _hostCtrl = TextEditingController();
   final _portCtrl = TextEditingController(text: '9090');
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedAddress();
+  }
+
+  Future<void> _loadSavedAddress() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _hostCtrl.text = prefs.getString('rosbridge_host') ?? 'localhost';
+      _portCtrl.text = (prefs.getInt('rosbridge_port') ?? 9090).toString();
+    });
+  }
+
+  Future<void> _saveAddress(String host, int port) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('rosbridge_host', host);
+    await prefs.setInt('rosbridge_port', port);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +74,7 @@ class _ConnectionDialogState extends State<ConnectionDialog> {
           onPressed: () {
             final host = _hostCtrl.text.trim();
             final port = int.tryParse(_portCtrl.text.trim()) ?? 9090;
+            _saveAddress(host, port);
             widget.onConnect(host, port);
             Navigator.pop(context);
           },
