@@ -9,6 +9,7 @@ import '../ros2/rosbridge_service.dart' as rb;
 import 'widgets/nav_status_panel.dart';
 import 'widgets/control_panel.dart';
 import 'widgets/connection_dialog.dart';
+import 'widgets/manual_control_panel.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -32,39 +33,77 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final ctrl = context.watch<GcsController>();
+    Widget build(BuildContext context) {
+      final ctrl = context.watch<GcsController>();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
-      appBar: _buildAppBar(ctrl),
-      body: Row(
-        children: [
-          // ── 지도 영역 (60%) ─────────────────────────────
-          Expanded(
-            flex: 6,
-            child: Stack(
-              children: [
-                _buildMap(ctrl),
-                _buildMapOverlay(ctrl),
-              ],
+      return Scaffold(
+        backgroundColor: const Color(0xFF1A1A2E),
+        appBar: _buildAppBar(ctrl),
+        body: Row(
+          children: [
+            // ── 지도 영역 (60%) ─────────────────────────────
+            Expanded(
+              flex: 6,
+              child: Stack(
+                children: [
+                  _buildMap(ctrl),
+                  _buildMapOverlay(ctrl),
+                ],
+              ),
             ),
-          ),
-          // ── 우측 패널 (40%) ─────────────────────────────
-          Container(
-            width: 380,
-            color: const Color(0xFF16213E),
-            child: Column(
-              children: [
-                Expanded(child: NavStatusPanel(ctrl: ctrl)),
-                ControlPanel(ctrl: ctrl, onSetOrigin: _enterOriginMode),
-              ],
+            // ── 우측 패널 ────────────────────────────────────
+            Container(
+              width: 380,
+              color: const Color(0xFF16213E),
+              child: DefaultTabController(
+                length: 3,
+                child: Column(
+                  children: [
+                    const TabBar(
+                      tabs: [
+                        Tab(icon: Icon(Icons.navigation, size: 12), text: 'VEHICLE', height: 40),
+                        Tab(icon: Icon(Icons.gamepad, size: 12), text: 'MANUAL', height: 40),
+                        Tab(icon: Icon(Icons.more_horiz, size: 12), text: 'TBD', height: 40),
+                      ],
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.white38,
+                      indicatorColor: Colors.tealAccent,
+                      dividerColor: Colors.white12,
+                      labelStyle: TextStyle(fontSize: 11),
+                    ),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          // TAB 1: NAV STATUS + CONTROL BUTTONS
+                          Column(
+                            children: [
+                              Expanded(child: NavStatusPanel(ctrl: ctrl)),
+                              ControlPanel(
+                                ctrl: ctrl,
+                                onSetOrigin: _enterOriginMode,
+                              ),
+                            ],
+                          ),
+                          // TAB 2: MANUAL CONTROL
+                          const ManualControlPanel(),
+                          // TAB 3: TBD
+                          const Center(
+                            child: Text(
+                              'TBD',
+                              style: TextStyle(color: Colors.white38, fontSize: 16),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
+    }
 
   AppBar _buildAppBar(GcsController ctrl) {
     final isConnected = ctrl.connectionState == rb.ConnectionState.connected;
