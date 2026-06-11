@@ -1,9 +1,9 @@
-// lib/screens/widgets/control_panel.dart
-
 import 'package:flutter/material.dart';
 import '../../ros2/gcs_controller.dart';
+import 'package:file_selector/file_selector.dart';
+import 'dart:typed_data';
 
-class ControlPanel extends StatelessWidget {
+class ControlPanel extends StatefulWidget {
   final GcsController ctrl;
   final VoidCallback onSetOrigin;
 
@@ -12,6 +12,14 @@ class ControlPanel extends StatelessWidget {
     required this.ctrl,
     required this.onSetOrigin,
   });
+
+  @override
+  State<ControlPanel> createState() => _ControlPanelState();
+}
+
+class _ControlPanelState extends State<ControlPanel> {
+  GcsController get ctrl => widget.ctrl;
+  VoidCallback get onSetOrigin => widget.onSetOrigin;
 
   @override
   Widget build(BuildContext context) {
@@ -23,38 +31,48 @@ class ControlPanel extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 모드 배너
           _modeBanner(),
           const SizedBox(height: 10),
 
-          // Origin 설정
+          // Clear All 한 줄
           _gcsButton(
-            label: 'Set Origin',
-            icon: Icons.my_location,
-            color: Colors.blueAccent,
-            onPressed: onSetOrigin,
+            label: 'Clear All',
+            icon: Icons.clear_all,
+            color: Colors.tealAccent,
+            onPressed: ctrl.clearAll,
+          ),
+          const SizedBox(height: 6),
+          
+          // Send Path 한 줄
+          _gcsButton(
+            label: 'Send Path',
+            icon: Icons.send,
+            color: Colors.tealAccent,
+            onPressed: ctrl.waypoints.isNotEmpty ? ctrl.sendGlobalPath : null,
           ),
           const SizedBox(height: 6),
 
-          // 경로 버튼들
+          // Import Path / Export Path 2열
           Row(
             children: [
               Expanded(
                 child: _gcsButton(
-                  label: 'Clear All',
-                  icon: Icons.clear_all,
-                  color: Colors.white38,
-                  onPressed: ctrl.clearAll,
+                  label: 'Import Path',
+                  icon: Icons.upload_file,
+                  color: Colors.tealAccent,
+                  onPressed: () => _importPath(context),
                   small: true,
                 ),
               ),
               const SizedBox(width: 6),
               Expanded(
                 child: _gcsButton(
-                  label: 'Send Path',
-                  icon: Icons.send,
+                  label: 'Export Path',
+                  icon: Icons.download,
                   color: Colors.tealAccent,
-                  onPressed: ctrl.waypoints.isNotEmpty ? ctrl.sendGlobalPath : null,
+                  onPressed: ctrl.waypoints.isNotEmpty
+                      ? () => _exportPath(context)
+                      : null,
                   small: true,
                 ),
               ),
@@ -62,12 +80,29 @@ class ControlPanel extends StatelessWidget {
           ),
           const SizedBox(height: 6),
 
-          // Set Yaw
-          _gcsButton(
-            label: 'Set Yaw',
-            icon: Icons.rotate_right,
-            color: Colors.purpleAccent,
-            onPressed: () => _showSetYawDialog(context),
+          // Set Origin / Set Yaw 2열
+          Row(
+            children: [
+              Expanded(
+                child: _gcsButton(
+                  label: 'Set Origin',
+                  icon: Icons.my_location,
+                  color: Colors.tealAccent,
+                  onPressed: onSetOrigin,
+                  small: true,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _gcsButton(
+                  label: 'Set Yaw',
+                  icon: Icons.rotate_right,
+                  color: Colors.tealAccent,
+                  onPressed: () => _showSetYawDialog(context),
+                  small: true,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
 
@@ -78,7 +113,7 @@ class ControlPanel extends StatelessWidget {
                 child: _gcsButton(
                   label: 'START',
                   icon: Icons.play_arrow,
-                  color: Colors.greenAccent,
+                  color: Colors.yellowAccent,
                   onPressed: ctrl.isTeleop ? null : ctrl.sendStart,
                 ),
               ),
@@ -95,7 +130,6 @@ class ControlPanel extends StatelessWidget {
           ),
           const SizedBox(height: 4),
 
-          // Waypoint 개수
           if (ctrl.waypoints.isNotEmpty)
             Text(
               'Waypoints: ${ctrl.waypoints.length}  |  Spline: ${ctrl.splinePath.length}pts',
@@ -105,6 +139,40 @@ class ControlPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _exportPath(BuildContext context) async {
+    final now = DateTime.now();
+    final timestamp =
+        '${now.year}_${now.month.toString().padLeft(2, '0')}_${now.day.toString().padLeft(2, '0')}'
+        '_${now.hour.toString().padLeft(2, '0')}_${now.minute.toString().padLeft(2, '0')}_${now.second.toString().padLeft(2, '0')}';
+
+    final location = await getSaveLocation(
+      suggestedName: 'waypoints_$timestamp.txt',
+      acceptedTypeGroups: [
+        const XTypeGroup(label: 'text', extensions: ['txt']),
+      ],
+    );
+    if (location != null) {
+      final content = ctrl.exportPathToText();
+      final file = XFile.fromData(
+        Uint8List.fromList(content.codeUnits),
+        mimeType: 'text/plain',
+      );
+      await file.saveTo(location.path);
+    }
+  }
+
+  void _importPath(BuildContext context) async {
+    const XTypeGroup typeGroup = XTypeGroup(
+      label: 'text',
+      extensions: ['txt'],
+    );
+    final XFile? file = await openFile(acceptedTypeGroups: [typeGroup]);
+    if (file != null) {
+      final content = await file.readAsString();
+      ctrl.importPathFromText(content);
+    }
   }
 
   Widget _modeBanner() {
@@ -153,13 +221,15 @@ class ControlPanel extends StatelessWidget {
           foregroundColor: isDisabled ? Colors.white24 : color,
           side: BorderSide(
               color: isDisabled ? Colors.white12 : color.withOpacity(0.5)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
           padding: EdgeInsets.zero,
         ),
         icon: Icon(icon, size: small ? 14 : 16),
         label: Text(
           label,
-          style: TextStyle(fontSize: small ? 11 : 12, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              fontSize: small ? 11 : 12, fontWeight: FontWeight.bold),
         ),
         onPressed: onPressed,
       ),
@@ -191,8 +261,8 @@ class ControlPanel extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                const Text('Cancel', style: TextStyle(color: Colors.white54)),
+            child: const Text('Cancel',
+                style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
@@ -207,8 +277,8 @@ class ControlPanel extends StatelessWidget {
                 Navigator.pop(ctx);
               }
             },
-            child:
-                const Text('Set', style: TextStyle(color: Colors.purpleAccent)),
+            child: const Text('Set',
+                style: TextStyle(color: Colors.purpleAccent)),
           ),
         ],
       ),

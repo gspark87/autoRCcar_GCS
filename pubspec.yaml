@@ -26,6 +26,9 @@ dependencies:
   # 저장
   shared_preferences: ^2.2.2
 
+  # 파일 저장
+  file_selector: ^1.0.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
