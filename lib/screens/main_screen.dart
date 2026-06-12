@@ -85,7 +85,7 @@ class _MainScreenState extends State<MainScreen> {
                             ],
                           ),
                           // TAB 2: MANUAL CONTROL
-                          const ManualControlPanel(),
+                          ManualControlPanel(ctrl: ctrl),
                           // TAB 3: TBD
                           const Center(
                             child: Text(
@@ -111,16 +111,43 @@ class _MainScreenState extends State<MainScreen> {
 
     return AppBar(
       backgroundColor: const Color(0xFF0F3460),
-      title: const Text(
-        'AutoRCCar GCS',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.5,
-        ),
+      title: const Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text('AutoRCcar GCS',
+              style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+          SizedBox(width: 6),
+          Text('\t© UV-Lab',
+              style: TextStyle(color: Colors.white54, fontSize: 18)),
+        ],
       ),
       actions: [
+        // 모드 배너 추가
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: ctrl.isTeleop
+                  ? Colors.orange.withOpacity(0.2)
+                  : Colors.green.withOpacity(0.2),
+              border: Border.all(
+                color: ctrl.isTeleop ? Colors.orange : Colors.green,
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              ctrl.isTeleop ? 'TELEOP MODE' : 'AUTO MODE',
+              style: TextStyle(
+                color: ctrl.isTeleop ? Colors.orange : Colors.green,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ),
+        ),
         // 연결 상태 표시
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
