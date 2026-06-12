@@ -31,8 +31,8 @@ class _ControlPanelState extends State<ControlPanel> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _modeBanner(),
-          const SizedBox(height: 10),
+          // _modeBanner(),
+          // const SizedBox(height: 10),
 
           // Clear All 한 줄
           _gcsButton(
@@ -175,33 +175,33 @@ class _ControlPanelState extends State<ControlPanel> {
     }
   }
 
-  Widget _modeBanner() {
-    final isTeleop = ctrl.isTeleop;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: isTeleop
-            ? Colors.orange.withOpacity(0.2)
-            : Colors.green.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: isTeleop ? Colors.orange : Colors.green,
-          width: 1.5,
-        ),
-      ),
-      child: Text(
-        isTeleop ? 'TELEOP MODE' : 'AUTO MODE',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: isTeleop ? Colors.orange : Colors.green,
-          fontWeight: FontWeight.bold,
-          fontSize: 13,
-          letterSpacing: 1.5,
-        ),
-      ),
-    );
-  }
+  // Widget _modeBanner() {
+  //   final isTeleop = ctrl.isTeleop;
+  //   return Container(
+  //     width: double.infinity,
+  //     padding: const EdgeInsets.symmetric(vertical: 8),
+  //     decoration: BoxDecoration(
+  //       color: isTeleop
+  //           ? Colors.orange.withOpacity(0.2)
+  //           : Colors.green.withOpacity(0.2),
+  //       borderRadius: BorderRadius.circular(6),
+  //       border: Border.all(
+  //         color: isTeleop ? Colors.orange : Colors.green,
+  //         width: 1.5,
+  //       ),
+  //     ),
+  //     child: Text(
+  //       isTeleop ? 'TELEOP MODE' : 'AUTO MODE',
+  //       textAlign: TextAlign.center,
+  //       style: TextStyle(
+  //         color: isTeleop ? Colors.orange : Colors.green,
+  //         fontWeight: FontWeight.bold,
+  //         fontSize: 13,
+  //         letterSpacing: 1.5,
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _gcsButton({
     required String label,

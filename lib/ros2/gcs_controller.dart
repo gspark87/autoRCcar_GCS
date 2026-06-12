@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/nav_state.dart';
 import '../models/path_point.dart';
+import '../models/control_command.dart';
 import '../math/user_geometry.dart';
 import '../math/cubic_spline.dart';
 import 'rosbridge_service.dart';
@@ -17,6 +18,12 @@ class GcsController extends ChangeNotifier {
 
   // ── 모드 ────────────────────────────────────────────────
   bool isTeleop = false;
+ 
+  // ── Control Command ────────────────────────────────
+  ControlCommand controlCommand = const ControlCommand();
+
+  // ── PWM Command ────────────────────────────────────
+  ControlCommand pwmCommand = const ControlCommand(); // ← 추가
 
   // ── 지도 원점 (LLH rad) ─────────────────────────────────
   // nav_topic의 origin (ECEF) 첫 수신 시 자동 설정
@@ -46,6 +53,8 @@ class GcsController extends ChangeNotifier {
       : _ros = RosbridgeService(host: host, port: port) {
     _ros.onNavState = _onNavState;
     _ros.onTeleopMode = _onTeleopMode;
+    _ros.onControlCommand = _onControlCommand;
+    _ros.onPwmCommand = _onPwmCommand;
     _ros.onConnectionChanged = (_) => notifyListeners();
   }
 
@@ -101,8 +110,32 @@ class GcsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onPwmCommand(ControlCommand cmd) {
+    pwmCommand = cmd;
+    notifyListeners();
+  }
+
+  void _onControlCommand(ControlCommand cmd) {
+    controlCommand = cmd;
+    notifyListeners();
+  }
+
   void _onTeleopMode(bool teleop) {
     isTeleop = teleop;
+    notifyListeners();
+  }
+
+  void sendTeleopCommand(int cmd) => _ros.publishTeleopCommand(cmd);
+
+  void sendSpeedReset() {
+    teleopSpeed = 0.0;
+    _ros.publishTeleopControlCommand(teleopSpeed, teleopSteer);
+    notifyListeners();
+  }
+
+  void sendSteerReset() {
+    teleopSteer = 0.0;
+    _ros.publishTeleopControlCommand(teleopSpeed, deg2rad(teleopSteer));
     notifyListeners();
   }
 
@@ -166,6 +199,34 @@ class GcsController extends ChangeNotifier {
       final llh = enu2llh([result.x[i], result.y[i], 0.0], _originLLH!);
       splinePath.add(LatLng(rad2deg(llh[0]), rad2deg(llh[1])));
     }
+  }
+
+  // ── Teleop 제어값 ─────────────────────────────────────
+  double teleopSpeed = 0.0;
+  double teleopSteer = 0.0;
+
+  void teleopSpeedUp() {
+    teleopSpeed += 0.1;
+    _ros.publishTeleopControlCommand(teleopSpeed, teleopSteer);
+    notifyListeners();
+  }
+
+  void teleopSpeedDown() {
+    teleopSpeed -= 0.1;
+    _ros.publishTeleopControlCommand(teleopSpeed, teleopSteer);
+    notifyListeners();
+  }
+
+  void teleopSteerLeft() {
+    teleopSteer -= 1.0;
+    _ros.publishTeleopControlCommand(teleopSpeed, deg2rad(teleopSteer));
+    notifyListeners();
+  }
+
+  void teleopSteerRight() {
+    teleopSteer += 1.0;
+    _ros.publishTeleopControlCommand(teleopSpeed, deg2rad(teleopSteer));
+    notifyListeners();
   }
 
   // ── ROS Publish ───────────────────────────────────────────

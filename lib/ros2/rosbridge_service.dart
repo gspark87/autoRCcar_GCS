@@ -1,11 +1,10 @@
 // lib/ros2/rosbridge_service.dart
-// rosbridge_server WebSocket 연동
-// ROS2에서: ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 
 import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/nav_state.dart';
+import '../models/control_command.dart';
 
 enum ConnectionState { disconnected, connecting, connected, error }
 
@@ -22,7 +21,9 @@ class RosbridgeService {
   // 콜백
   Function(NavState)? onNavState;
   Function(bool)? onTeleopMode;
+  Function(ControlCommand)? onControlCommand;
   Function(ConnectionState)? onConnectionChanged;
+  Function(ControlCommand)? onPwmCommand;
 
   ConnectionState _state = ConnectionState.disconnected;
   ConnectionState get state => _state;
@@ -68,6 +69,8 @@ class RosbridgeService {
   void _subscribeTopics() {
     _subscribe('nav_topic', 'autorccar_interfaces/msg/NavState');
     _subscribe('hardware_control/teleop_mode', 'std_msgs/msg/Bool');
+    _subscribe('hardware_control/control_command', 'autorccar_interfaces/msg/ControlCommand');
+    _subscribe('hardware_control/pwm_command', 'autorccar_interfaces/msg/ControlCommand');
   }
 
   void _subscribe(String topic, String type) {
@@ -81,21 +84,19 @@ class RosbridgeService {
   void _unsubscribeAll() {
     _send({'op': 'unsubscribe', 'topic': 'nav_topic'});
     _send({'op': 'unsubscribe', 'topic': 'hardware_control/teleop_mode'});
+    _send({'op': 'unsubscribe', 'topic': 'hardware_control/control_command'});
   }
 
   // ── Publish ──────────────────────────────────────────────
 
-  /// gcs/command: 0=stop, 1=start
   void publishCommand(int cmd) {
     _publish('gcs/command', 'std_msgs/msg/Int8', {'data': cmd});
   }
 
-  /// setyaw_topic
   void publishSetYaw(double yaw) {
     _publish('setyaw_topic', 'std_msgs/msg/Float32', {'data': yaw});
   }
 
-  /// gcs/global_path: PathPoint 배열 {x, y, speed}
   void publishGlobalPath(List<List<double>> pathList) {
     List<Map> pathPoints = pathList
         .map((p) => {'x': p[0], 'y': p[1], 'speed': 0.0})
@@ -106,6 +107,15 @@ class RosbridgeService {
 
   void _publish(String topic, String type, Map msg) {
     _send({'op': 'publish', 'topic': topic, 'type': type, 'msg': msg});
+  }
+
+  void publishTeleopCommand(int cmd) {
+    _publish('teleop/command', 'std_msgs/msg/Int8', {'data': cmd});
+  }
+
+  void publishTeleopControlCommand(double speed, double steeringAngle) {
+    _publish('teleop/control_command', 'autorccar_interfaces/msg/ControlCommand',
+        {'speed': speed, 'steering_angle': steeringAngle});
   }
 
   // ── Internal ─────────────────────────────────────────────
@@ -129,12 +139,16 @@ class RosbridgeService {
 
       switch (topic) {
         case 'nav_topic':
-          final navState = NavState.fromRosMsg(msg);
-          onNavState?.call(navState);
+          onNavState?.call(NavState.fromRosMsg(msg));
           break;
         case 'hardware_control/teleop_mode':
-          final isTeleop = msg['data'] as bool? ?? false;
-          onTeleopMode?.call(isTeleop);
+          onTeleopMode?.call(msg['data'] as bool? ?? false);
+          break;
+        case 'hardware_control/control_command':
+          onControlCommand?.call(ControlCommand.fromRosMsg(msg));
+          break;
+        case 'hardware_control/pwm_command':
+          onPwmCommand?.call(ControlCommand.fromRosMsg(msg));
           break;
       }
     } catch (_) {}
