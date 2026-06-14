@@ -218,13 +218,13 @@ class GcsController extends ChangeNotifier {
   }
 
   void teleopSteerLeft() {
-    teleopSteer -= 1.0;
+    teleopSteer += 1.0;
     _ros.publishTeleopControlCommand(teleopSpeed, deg2rad(teleopSteer));
     notifyListeners();
   }
 
   void teleopSteerRight() {
-    teleopSteer += 1.0;
+    teleopSteer -= 1.0;
     _ros.publishTeleopControlCommand(teleopSpeed, deg2rad(teleopSteer));
     notifyListeners();
   }
