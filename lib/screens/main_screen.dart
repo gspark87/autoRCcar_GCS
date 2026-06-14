@@ -10,6 +10,9 @@ import 'widgets/nav_status_panel.dart';
 import 'widgets/control_panel.dart';
 import 'widgets/connection_dialog.dart';
 import 'widgets/manual_control_panel.dart';
+import '../map/hybrid_tile_provider.dart';
+import '../map/connectivity_service.dart';
+import '../map/mbtiles_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -21,6 +24,7 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   final MapController _mapController = MapController();
   bool _isSettingOrigin = false;
+  double _currentZoom = 18.0; // ← 추가
 
   @override
   void initState() {
@@ -217,13 +221,34 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildMap(GcsController ctrl) {
-    final center = ctrl.vehiclePosition ?? const LatLng(37.3595, 127.1052);
+    final mbtiles = context.read<MbtilesService>();
+    final connectivity = context.watch<ConnectivityService>();
+
+    // 우선순위: 차량 위치 > mbtiles 중심 > 기본값
+    final center = ctrl.vehiclePosition
+        ?? mbtiles.centerLatLng
+        ?? const LatLng(37.3595, 127.1052);
+
+    // 오프라인일 때만 mbtiles 줌 범위로 제한
+    double minZoom = 1;
+    double maxZoom = 19;
+    if (!connectivity.isOnline && mbtiles.isAvailable) {
+      minZoom = (mbtiles.minZoom ?? 1).toDouble();
+      maxZoom = (mbtiles.maxZoom ?? 19).toDouble();
+    }
 
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
         initialCenter: center,
         initialZoom: 18,
+        minZoom: minZoom,   // ← 추가
+        maxZoom: maxZoom,   // ← 추가
+        onPositionChanged: (position, hasGesture) {
+          setState(() {
+            _currentZoom = position.zoom ?? _currentZoom; // ← 수정
+          });
+        },
         onTap: (tapPos, latLng) {
           if (_isSettingOrigin) {
             ctrl.setOrigin(latLng);
@@ -245,9 +270,11 @@ class _MainScreenState extends State<MainScreen> {
       children: [
         // OSM 타일
         TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          tileProvider: HybridTileProvider(
+            context.read<MbtilesService>(),
+            context.watch<ConnectivityService>(),
+          ),
           userAgentPackageName: 'com.example.autorccar_gcs',
-          errorTileCallback: (tile, error, stackTrace) {},
         ),
         // 주행 궤적
         if (ctrl.trajectory.isNotEmpty)
@@ -351,8 +378,40 @@ class _MainScreenState extends State<MainScreen> {
   }
 
 Widget _buildMapOverlay(GcsController ctrl) {
+  final connectivity = context.watch<ConnectivityService>(); // ← 추가
+
   return Stack(
     children: [
+      // 좌측 상단: 온라인/오프라인 상태  ← 새로 추가
+      if (connectivity.checked)
+        Positioned(
+          top: 16,
+          left: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: connectivity.isOnline
+                  ? Colors.green.withOpacity(0.7)
+                  : Colors.red.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  connectivity.isOnline ? Icons.wifi : Icons.wifi_off,
+                  color: Colors.white,
+                  size: 14,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  connectivity.isOnline ? 'ONLINE MAP' : 'OFFLINE - LOCAL MAP',
+                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+        ),
       // 좌측 하단 오버레이
       Positioned(
         bottom: 16,
@@ -405,6 +464,26 @@ Widget _buildMapOverlay(GcsController ctrl) {
                 ),
               ),
           ],
+        ),
+      ),
+      // 우측 하단 Zoom 표시
+      Positioned(
+        bottom: 16,
+        right: 16,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            'Zoom: ${_currentZoom.toStringAsFixed(1)}', // ← 수정
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 11,
+              fontFamily: 'monospace',
+            ),
+          ),
         ),
       ),
       // 우측 상단 GPS 표시

@@ -1,14 +1,23 @@
-// lib/main.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'ros2/gcs_controller.dart';
+import 'map/mbtiles_service.dart';
+import 'map/connectivity_service.dart';
 import 'screens/main_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final mbtiles = MbtilesService();
+  await mbtiles.init();
+
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => GcsController(host: 'localhost', port: 9090),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => GcsController(host: 'localhost', port: 9090)),
+        Provider<MbtilesService>.value(value: mbtiles),
+        ChangeNotifierProvider(create: (_) => ConnectivityService()),
+      ],
       child: const GcsApp(),
     ),
   );
