@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/nav_state.dart';
 import '../models/control_command.dart';
+import '../models/occupancy_grid.dart';
+import '../models/system_status.dart';
 
 enum ConnectionState { disconnected, connecting, connected, error }
 
@@ -24,6 +26,9 @@ class RosbridgeService {
   Function(ControlCommand)? onControlCommand;
   Function(ConnectionState)? onConnectionChanged;
   Function(ControlCommand)? onPwmCommand;
+  Function(OccupancyGridMsg)? onOccupancyGrid;
+  Function(Map<String, String>)? onProcessStatus;
+  Function(SystemStatus)? onSystemStatus;
 
   ConnectionState _state = ConnectionState.disconnected;
   ConnectionState get state => _state;
@@ -66,19 +71,36 @@ class RosbridgeService {
     _setState(ConnectionState.disconnected);
   }
 
+  bool _occupancyGridSubscribed = false; // ← 클래스 필드로 추가
+
   void _subscribeTopics() {
     _subscribe('nav_topic', 'autorccar_interfaces/msg/NavState');
     _subscribe('hardware_control/teleop_mode', 'std_msgs/msg/Bool');
     _subscribe('hardware_control/control_command', 'autorccar_interfaces/msg/ControlCommand');
     _subscribe('hardware_control/pwm_command', 'autorccar_interfaces/msg/ControlCommand');
+    _subscribe('util/process_status', 'std_msgs/msg/String');
+    _subscribe('util/system_status', 'std_msgs/msg/String');
+
+    if (_occupancyGridSubscribed) {
+      _subscribe('occupancy_grid', 'nav_msgs/msg/OccupancyGrid',
+          throttleRateMs: 1000, queueLength: 1);
+    }
   }
 
-  void _subscribe(String topic, String type) {
-    _send({
+  void _subscribe(String topic, String type,
+      {int? throttleRateMs, int? queueLength}) {
+    final msg = <String, dynamic>{
       'op': 'subscribe',
       'topic': topic,
       'type': type,
-    });
+    };
+    if (throttleRateMs != null) msg['throttle_rate'] = throttleRateMs;
+    if (queueLength != null) msg['queue_length'] = queueLength;
+    _send(msg);
+  }
+
+  void _unsubscribe(String topic) {
+    _send({'op': 'unsubscribe', 'topic': topic});
   }
 
   void _unsubscribeAll() {
@@ -150,6 +172,28 @@ class RosbridgeService {
         case 'hardware_control/pwm_command':
           onPwmCommand?.call(ControlCommand.fromRosMsg(msg));
           break;
+        case 'util/process_status':
+          try {
+            final dataStr = msg['data'] as String?;
+            if (dataStr != null) {
+              final parsed = jsonDecode(dataStr) as Map<String, dynamic>;
+              onProcessStatus?.call(parsed.map((k, v) => MapEntry(k, v.toString())));
+            }
+          } catch (_) {}
+          break;
+        case 'util/system_status':
+          // print('system_status received: ${msg['data']}'); // ← 추가
+          try {
+            final dataStr = msg['data'] as String?;
+            if (dataStr != null) {
+              final parsed = jsonDecode(dataStr) as Map<String, dynamic>;
+              onSystemStatus?.call(SystemStatus.fromJson(parsed));
+            }
+          } catch (_) {}
+          break;
+        case 'occupancy_grid':
+          onOccupancyGrid?.call(OccupancyGridMsg.fromRosMsg(msg));
+          break;
       }
     } catch (_) {}
   }
@@ -164,6 +208,33 @@ class RosbridgeService {
       _setState(ConnectionState.disconnected);
       _scheduleReconnect();
     }
+  }
+
+  void subscribeOccupancyGrid() {
+    if (_occupancyGridSubscribed) return;
+    _occupancyGridSubscribed = true;
+    if (_state == ConnectionState.connected) {
+      _subscribe('occupancy_grid', 'nav_msgs/msg/OccupancyGrid',
+          throttleRateMs: 1000, queueLength: 1);
+    }
+  }
+
+  void unsubscribeOccupancyGrid() {
+    if (!_occupancyGridSubscribed) return;
+    _occupancyGridSubscribed = false;
+    if (_state == ConnectionState.connected) {
+      _unsubscribe('occupancy_grid');
+    }
+  }
+
+  void publishProcessCommand(String name, String action) {
+    final payload = jsonEncode({'name': name, 'action': action});
+    _publish('util/process_command', 'std_msgs/msg/String', {'data': payload});
+  }
+
+  void publishSystemCommand(String action) {
+    final payload = jsonEncode({'action': action});
+    _publish('util/system_command', 'std_msgs/msg/String', {'data': payload});
   }
 
   void _scheduleReconnect() {

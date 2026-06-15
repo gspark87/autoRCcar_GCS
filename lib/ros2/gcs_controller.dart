@@ -1,5 +1,3 @@
-// lib/ros2/gcs_controller.dart
-
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/nav_state.dart';
@@ -8,6 +6,8 @@ import '../models/control_command.dart';
 import '../math/user_geometry.dart';
 import '../math/cubic_spline.dart';
 import 'rosbridge_service.dart';
+import '../models/occupancy_grid.dart';
+import '../models/system_status.dart';
 
 class GcsController extends ChangeNotifier {
   final RosbridgeService _ros;
@@ -34,6 +34,9 @@ class GcsController extends ChangeNotifier {
   double? originLatDeg;
   double? originLonDeg;
 
+  // ── ENU 궤적 (E, N) - 위치 그래프용 ─────────────────────
+  List<(double, double)> enuTrajectory = [];
+
   Function(LatLng)? onOriginSet;
 
   // ── 차량 위치 (지도) ─────────────────────────────────────
@@ -46,6 +49,9 @@ class GcsController extends ChangeNotifier {
   // ── Spline 경로 ─────────────────────────────────────────
   List<LatLng> splinePath = [];
 
+  // ── Spline 경로 (ENU) - 위치 그래프용 ────────────────────
+  List<(double, double)> splineENU = [];
+
   // ── 연결 상태 ────────────────────────────────────────────
   ConnectionState get connectionState => _ros.state;
 
@@ -55,11 +61,31 @@ class GcsController extends ChangeNotifier {
     _ros.onTeleopMode = _onTeleopMode;
     _ros.onControlCommand = _onControlCommand;
     _ros.onPwmCommand = _onPwmCommand;
+    _ros.onOccupancyGrid = _onOccupancyGrid; 
     _ros.onConnectionChanged = (_) => notifyListeners();
+    _ros.onProcessStatus = _onProcessStatus;
+    _ros.onSystemStatus = _onSystemStatus;
   }
 
-  // ── ROS 연결 ─────────────────────────────────────────────
+  // ── 프로세스 상태 (RUN 탭) ───────────────────────────────
+  Map<String, String> processStatus = {};
 
+  // ── 시스템 상태 (TBD/SYSTEM 탭) ──────────────────────────
+  SystemStatus systemStatus = const SystemStatus();
+
+  // ── Occupancy Grid ──────────────────────────────────
+  OccupancyGridMsg? occupancyGrid;
+  int occupancyGridVersion = 0;
+
+  void _onProcessStatus(Map<String, String> status) {
+    processStatus = status;
+    notifyListeners();
+  }
+
+  void startProcess(String name) => _ros.publishProcessCommand(name, 'start');
+  void stopProcess(String name) => _ros.publishProcessCommand(name, 'stop');
+
+  // ── ROS 연결 ─────────────────────────────────────────────
   void connect(String host, int port) {
     _ros.updateAddress(host, port);
     _ros.connect();
@@ -67,8 +93,10 @@ class GcsController extends ChangeNotifier {
 
   void disconnect() => _ros.disconnect();
 
-  // ── Nav 콜백 ─────────────────────────────────────────────
+  void enableOccupancyGrid() => _ros.subscribeOccupancyGrid();
+  void disableOccupancyGrid() => _ros.unsubscribeOccupancyGrid();
 
+  // ── Nav 콜백 ─────────────────────────────────────────────
   void _onNavState(NavState msg) {
     navState = msg;
 
@@ -104,11 +132,20 @@ class GcsController extends ChangeNotifier {
       final llh = enu2llh(enu, _originLLH!);
       vehiclePosition = LatLng(rad2deg(llh[0]), rad2deg(llh[1]));
       trajectory.add(vehiclePosition!);
-      // if (trajectory.length > 2000) trajectory.removeAt(0); 
+      // ── ENU 궤적 누적 ────────────────────────────────────
+      enuTrajectory.add((msg.position.x, msg.position.y));
     }
 
     notifyListeners();
   }
+
+  void _onSystemStatus(SystemStatus status) {
+    systemStatus = status;
+    notifyListeners();
+  }
+
+  void restartJetson() => _ros.publishSystemCommand('restart');
+  void shutdownJetson() => _ros.publishSystemCommand('shutdown');
 
   void _onPwmCommand(ControlCommand cmd) {
     pwmCommand = cmd;
@@ -152,8 +189,13 @@ class GcsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Waypoint 관리 ─────────────────────────────────────────
+  void _onOccupancyGrid(OccupancyGridMsg grid) {
+    occupancyGrid = grid;
+    occupancyGridVersion++;
+    notifyListeners();
+  }
 
+  // ── Waypoint 관리 ─────────────────────────────────────────
   void addWaypoint(LatLng latLng) {
     double ex = 0, ey = 0;
     if (_originLLH != null) {
@@ -175,29 +217,73 @@ class GcsController extends ChangeNotifier {
     }
   }
 
+  /// 위치 그래프(ENU)에서 직접 좌표로 waypoint 추가
+  void addWaypointENU(double east, double north) {
+    LatLng latLng;
+    if (_originLLH != null) {
+      final llh = enu2llh([east, north, 0.0], _originLLH!);
+      latLng = LatLng(rad2deg(llh[0]), rad2deg(llh[1]));
+    } else {
+      latLng = const LatLng(0, 0);
+    }
+    waypoints.add(WaypointLLH(latLng: latLng, x: east, y: north));
+    _updateSpline();
+    notifyListeners();
+  }
+
+  /// (east, north) 근처의 waypoint 삭제 (thresholdM 이내)
+  void removeWaypointNearENU(double east, double north, double thresholdM) {
+    if (waypoints.isEmpty) return;
+    int closestIdx = -1;
+    double closestDist2 = double.infinity;
+    for (int i = 0; i < waypoints.length; i++) {
+      final dx = waypoints[i].x - east;
+      final dy = waypoints[i].y - north;
+      final d2 = dx * dx + dy * dy;
+      if (d2 < closestDist2) {
+        closestDist2 = d2;
+        closestIdx = i;
+      }
+    }
+    if (closestIdx != -1 && closestDist2 < thresholdM * thresholdM) {
+      removeWaypoint(closestIdx);
+    }
+  }
+
   void clearAll() {
     waypoints.clear();
     splinePath.clear();
+    splineENU.clear();
     trajectory.clear();
+    enuTrajectory.clear();
     notifyListeners();
   }
 
   // ── Spline 계산 ───────────────────────────────────────────
-
   void _updateSpline() {
-    if (waypoints.length < 2 || _originLLH == null) {
+    if (waypoints.length < 2) {
       splinePath.clear();
+      splineENU.clear();
       return;
     }
     final xPts = waypoints.map((w) => w.x).toList();
     final yPts = waypoints.map((w) => w.y).toList();
     final result = calculateCubicSplinePath(xPts, yPts, ds: 0.5);
-    if (result == null) { splinePath.clear(); return; }
+    if (result == null) {
+      splinePath.clear();
+      splineENU.clear();
+      return;
+    }
 
-    splinePath = [];
-    for (int i = 0; i < result.x.length; i++) {
-      final llh = enu2llh([result.x[i], result.y[i], 0.0], _originLLH!);
-      splinePath.add(LatLng(rad2deg(llh[0]), rad2deg(llh[1])));
+    splineENU = List.generate(result.x.length, (i) => (result.x[i], result.y[i]));
+
+    if (_originLLH != null) {
+      splinePath = splineENU.map((p) {
+        final llh = enu2llh([p.$1, p.$2, 0.0], _originLLH!);
+        return LatLng(rad2deg(llh[0]), rad2deg(llh[1]));
+      }).toList();
+    } else {
+      splinePath = [];
     }
   }
 

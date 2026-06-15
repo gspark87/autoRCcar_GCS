@@ -1,5 +1,3 @@
-// lib/screens/main_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -13,6 +11,12 @@ import 'widgets/manual_control_panel.dart';
 import '../map/hybrid_tile_provider.dart';
 import '../map/connectivity_service.dart';
 import '../map/mbtiles_service.dart';
+import 'widgets/occupancy_grid_view.dart';
+import 'widgets/enu_plot_view.dart';
+import 'widgets/run_panel.dart';
+import 'widgets/system_monitor_panel.dart';
+
+enum MapMode { osm, occupancyGrid, enuPlot }
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -25,6 +29,8 @@ class _MainScreenState extends State<MainScreen> {
   final MapController _mapController = MapController();
   bool _isSettingOrigin = false;
   double _currentZoom = 18.0; // ← 추가
+
+  MapMode _mapMode = MapMode.osm;
 
   @override
   void initState() {
@@ -48,10 +54,21 @@ class _MainScreenState extends State<MainScreen> {
             // ── 지도 영역 (60%) ─────────────────────────────
             Expanded(
               flex: 6,
-              child: Stack(
+              child: Column(
                 children: [
-                  _buildMap(ctrl),
-                  _buildMapOverlay(ctrl),
+                  _buildMapModeSelector(),
+                    Expanded(
+                      child: switch (_mapMode) {
+                        MapMode.osm => Stack(
+                            children: [
+                              _buildMap(ctrl),
+                              _buildMapOverlay(ctrl),
+                            ],
+                          ),
+                        MapMode.occupancyGrid => OccupancyGridView(ctrl: ctrl),
+                        MapMode.enuPlot => EnuPlotView(ctrl: ctrl),
+                      },
+                    ),
                 ],
               ),
             ),
@@ -60,14 +77,15 @@ class _MainScreenState extends State<MainScreen> {
               width: 380,
               color: const Color(0xFF16213E),
               child: DefaultTabController(
-                length: 3,
+                length: 4,
                 child: Column(
                   children: [
                     const TabBar(
                       tabs: [
                         Tab(icon: Icon(Icons.navigation, size: 12), text: 'VEHICLE', height: 40),
                         Tab(icon: Icon(Icons.gamepad, size: 12), text: 'MANUAL', height: 40),
-                        Tab(icon: Icon(Icons.more_horiz, size: 12), text: 'TBD', height: 40),
+                        Tab(icon: Icon(Icons.play_circle, size: 12), text: 'RUN', height: 40), // ← 추가
+                        Tab(icon: Icon(Icons.monitor_heart, size: 12), text: 'SYSTEM', height: 40),
                       ],
                       labelColor: Colors.white,
                       unselectedLabelColor: Colors.white38,
@@ -90,13 +108,10 @@ class _MainScreenState extends State<MainScreen> {
                           ),
                           // TAB 2: MANUAL CONTROL
                           ManualControlPanel(ctrl: ctrl),
-                          // TAB 3: TBD
-                          const Center(
-                            child: Text(
-                              'TBD',
-                              style: TextStyle(color: Colors.white38, fontSize: 16),
-                            ),
-                          ),
+                          // TAB 3: RUN
+                          RunPanel(ctrl: ctrl),
+                          // TAB 4: SYSTEM
+                          SystemMonitorPanel(ctrl: ctrl),
                         ],
                       ),
                     ),
@@ -377,119 +392,160 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-Widget _buildMapOverlay(GcsController ctrl) {
-  final connectivity = context.watch<ConnectivityService>(); // ← 추가
+  Widget _buildMapModeSelector() {
+    return Container(
+      color: const Color(0xFF16213E),
+      height: 40,
+      child: Row(
+        children: [
+          _mapModeButton('지도', MapMode.osm, Icons.map),
+          _mapModeButton('점유 격자맵', MapMode.occupancyGrid, Icons.grid_on),
+          _mapModeButton('위치 그래프', MapMode.enuPlot, Icons.scatter_plot), // ← 추가
+        ],
+      ),
+    );
+  }
 
-  return Stack(
-    children: [
-      // 좌측 상단: 온라인/오프라인 상태  ← 새로 추가
-      if (connectivity.checked)
-        Positioned(
-          top: 16,
-          left: 16,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: connectivity.isOnline
-                  ? Colors.green.withOpacity(0.7)
-                  : Colors.red.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  connectivity.isOnline ? Icons.wifi : Icons.wifi_off,
-                  color: Colors.white,
-                  size: 14,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  connectivity.isOnline ? 'ONLINE MAP' : 'OFFLINE - LOCAL MAP',
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-        ),
-      // 좌측 하단 오버레이
-      Positioned(
-        bottom: 16,
-        left: 16,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_isSettingOrigin)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.touch_app, color: Colors.white, size: 16),
-                    SizedBox(width: 6),
-                    Text(
-                      '지도를 클릭하여 Origin 설정',
-                      style: TextStyle(color: Colors.white, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-            if (!_isSettingOrigin && ctrl.hasOrigin)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '좌클릭: Waypoint 추가  |  우클릭: 삭제  |  ${ctrl.waypoints.length}개',
-                  style: const TextStyle(color: Colors.white70, fontSize: 11),
-                ),
-              ),
-            if (!ctrl.hasOrigin && !_isSettingOrigin)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.7),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text(
-                  '⚠ ROS2 연결 후 Origin 자동 설정됩니다',
-                  style: TextStyle(color: Colors.white, fontSize: 11),
-                ),
-              ),
-          ],
-        ),
-      ),
-      // 우측 하단 Zoom 표시
-      Positioned(
-        bottom: 16,
-        right: 16,
+  Widget _mapModeButton(String label, MapMode mode, IconData icon) {
+    final selected = _mapMode == mode;
+    return SizedBox(
+      width: 127,
+      height: 40,
+      child: InkWell(
+        onTap: () {
+          final ctrl = context.read<GcsController>();
+          if (mode == MapMode.occupancyGrid && _mapMode != MapMode.occupancyGrid) {
+            ctrl.enableOccupancyGrid();
+          } else if (mode != MapMode.occupancyGrid && _mapMode == MapMode.occupancyGrid) {
+            ctrl.disableOccupancyGrid();
+          }
+          setState(() => _mapMode = mode);
+        },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.6),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Text(
-            'Zoom: ${_currentZoom.toStringAsFixed(1)}', // ← 수정
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 11,
-              fontFamily: 'monospace',
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? Colors.tealAccent : Colors.transparent,
+                width: 2,
+              ),
             ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              const SizedBox(width: 12),
+              Icon(
+                icon,
+                size: 18,
+                color: selected ? Colors.white : Colors.white38,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: selected ? Colors.white : Colors.white38,
+                ),
+              ),
+            ],
           ),
         ),
       ),
-      // 우측 상단 GPS 표시
-      if (ctrl.vehiclePosition != null)
+    );
+  }
+
+  Widget _buildMapOverlay(GcsController ctrl) {
+    final connectivity = context.watch<ConnectivityService>(); // ← 추가
+
+    return Stack(
+      children: [
+        // 좌측 상단: 온라인/오프라인 상태  ← 새로 추가
+        if (connectivity.checked)
+          Positioned(
+            top: 16,
+            left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: connectivity.isOnline
+                    ? Colors.green.withOpacity(0.7)
+                    : Colors.red.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    connectivity.isOnline ? Icons.wifi : Icons.wifi_off,
+                    color: Colors.white,
+                    size: 14,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    connectivity.isOnline ? 'ONLINE MAP' : 'OFFLINE - LOCAL MAP',
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        // 좌측 하단 오버레이
         Positioned(
-          top: 16,
+          bottom: 16,
+          left: 16,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_isSettingOrigin)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.touch_app, color: Colors.white, size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        '지도를 클릭하여 Origin 설정',
+                        style: TextStyle(color: Colors.white, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              if (!_isSettingOrigin && ctrl.hasOrigin)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '좌클릭: Waypoint 추가  |  우클릭: 삭제  |  ${ctrl.waypoints.length}개',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
+                ),
+              if (!ctrl.hasOrigin && !_isSettingOrigin)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Text(
+                    '⚠ ROS2 연결 후 Origin 자동 설정됩니다',
+                    style: TextStyle(color: Colors.white, fontSize: 11),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        // 우측 하단 Zoom 표시
+        Positioned(
+          bottom: 16,
           right: 16,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -497,39 +553,60 @@ Widget _buildMapOverlay(GcsController ctrl) {
               color: Colors.black.withOpacity(0.6),
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const Text(
-                  'GPS POSITION',
-                  style: TextStyle(
-                      color: Colors.white54,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Lat: ${ctrl.vehiclePosition!.latitude.toStringAsFixed(7)}',
-                  style: const TextStyle(
-                      color: Colors.lightBlueAccent,
-                      fontSize: 12,
-                      fontFamily: 'monospace'),
-                ),
-                Text(
-                  'Lon: ${ctrl.vehiclePosition!.longitude.toStringAsFixed(7)}',
-                  style: const TextStyle(
-                      color: Colors.lightBlueAccent,
-                      fontSize: 12,
-                      fontFamily: 'monospace'),
-                ),
-              ],
+            child: Text(
+              'Zoom: ${_currentZoom.toStringAsFixed(1)}', // ← 수정
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
             ),
           ),
         ),
-    ],
-  );
-}
+        // 우측 상단 GPS 표시
+        if (ctrl.vehiclePosition != null)
+          Positioned(
+            top: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text(
+                    'GPS POSITION',
+                    style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Lat: ${ctrl.vehiclePosition!.latitude.toStringAsFixed(7)}',
+                    style: const TextStyle(
+                        color: Colors.lightBlueAccent,
+                        fontSize: 12,
+                        fontFamily: 'monospace'),
+                  ),
+                  Text(
+                    'Lon: ${ctrl.vehiclePosition!.longitude.toStringAsFixed(7)}',
+                    style: const TextStyle(
+                        color: Colors.lightBlueAccent,
+                        fontSize: 12,
+                        fontFamily: 'monospace'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 
   double _yawToMapAngle(double yawDeg) {
     // yaw: 북쪽 기준 시계방향 [deg] → 지도 회전각 [rad]
