@@ -4,6 +4,7 @@
 // 단일 입력창 + 단일 응답 텍스트박스 (대화 히스토리 없음).
 
 import 'package:flutter/material.dart';
+import '../../config/process_definitions.dart';
 import '../../llm/llm_service.dart';
 import '../../llm/llm_settings.dart';
 import '../../models/llm_action.dart';
@@ -26,7 +27,8 @@ class _LlmPanelState extends State<LlmPanel> {
 
   LlmSettings? _settings;
   _ResponseStatus _status = _ResponseStatus.idle;
-  String _responseMessage = '자연어로 명령을 입력하세요. 예: "3미터 앞으로 이동", "출발", "정지", "경로 전체 삭제"';
+  String _responseMessage =
+      '자연어로 명령을 입력하세요. 예: "3미터 앞으로 이동", "수동모드로 전환", "INS/GNSS 프로세스 시작", "Jetson 재부팅"';
 
   @override
   void initState() {
@@ -75,6 +77,8 @@ class _LlmPanelState extends State<LlmPanel> {
         currentNorth: widget.ctrl.currentNorth,
         currentYawDeg: widget.ctrl.yawDeg,
         hasOrigin: widget.ctrl.hasOrigin,
+        isTeleop: widget.ctrl.isTeleop,
+        validProcessIds: kValidProcessIds.toList(),
       );
 
       final result = LlmResult.fromRawResponse(raw);
@@ -89,10 +93,27 @@ class _LlmPanelState extends State<LlmPanel> {
         return;
       }
 
-      final errors = widget.ctrl.executeLlmActions(result.actions);
+      final execResult = widget.ctrl.executeLlmActions(result.actions);
+      final confirmedErrors = <String>[];
 
+      // 고위험 액션(restart_jetson/shutdown_jetson)은 한 번 더 확인 후 실행
+      if (execResult.hasPending) {
+        for (final action in execResult.pendingConfirmations) {
+          final confirmed = await _confirmHighRiskAction(action);
+          if (confirmed) {
+            final err = widget.ctrl.confirmPendingAction(action);
+            if (err != null) confirmedErrors.add(err);
+          } else {
+            confirmedErrors.add('${_describeAction(action)}: 사용자가 취소했습니다.');
+          }
+        }
+      }
+
+      final allErrors = [...execResult.errors, ...confirmedErrors];
+
+      if (!mounted) return;
       setState(() {
-        if (errors.isEmpty) {
+        if (allErrors.isEmpty) {
           _status = _ResponseStatus.success;
           _responseMessage = result.message.isNotEmpty
               ? result.message
@@ -100,10 +121,11 @@ class _LlmPanelState extends State<LlmPanel> {
         } else {
           _status = _ResponseStatus.partial;
           _responseMessage =
-              '${result.message}\n\n일부 명령 실행 실패:\n${errors.join('\n')}';
+              '${result.message}\n\n일부 명령 실행 실패:\n${allErrors.join('\n')}';
         }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _status = _ResponseStatus.error;
         _responseMessage = e is LlmApiException ? e.message : '오류 발생: $e';
@@ -111,6 +133,55 @@ class _LlmPanelState extends State<LlmPanel> {
     } finally {
       _inputCtrl.clear();
     }
+  }
+
+  String _describeAction(LlmAction action) => switch (action.type) {
+        'restart_jetson' => 'Jetson 재부팅',
+        'shutdown_jetson' => 'Jetson 종료',
+        _ => action.type,
+      };
+
+  /// 고위험 액션(재부팅/종료) 실행 전 확인 다이얼로그.
+  /// 사용자가 확인하면 true, 취소하면 false.
+  Future<bool> _confirmHighRiskAction(LlmAction action) async {
+    final label = _describeAction(action);
+    final message = switch (action.type) {
+      'restart_jetson' =>
+        'LLM 명령으로 차량 컴퓨터(Jetson)를 재부팅하려 합니다.\n실행 중인 모든 노드가 종료됩니다. 계속할까요?',
+      'shutdown_jetson' =>
+        'LLM 명령으로 차량 컴퓨터(Jetson)를 종료하려 합니다.\n다시 켜려면 차량 전원을 직접 조작해야 합니다. 계속할까요?',
+      _ => 'LLM이 고위험 명령($label)을 요청했습니다. 계속할까요?',
+    };
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber, color: Colors.redAccent, size: 20),
+            const SizedBox(width: 8),
+            Text(label,
+                style: const TextStyle(color: Colors.white, fontSize: 16)),
+          ],
+        ),
+        content: Text(message,
+            style: const TextStyle(color: Colors.white70, fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent.withOpacity(0.3)),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('확인', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
   }
 
   Color get _statusColor => switch (_status) {

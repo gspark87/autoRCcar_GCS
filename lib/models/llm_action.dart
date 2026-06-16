@@ -6,7 +6,11 @@
 import 'dart:convert';
 
 class LlmAction {
-  final String type; // add_waypoint | set_yaw | start | stop | clear_all
+  final String type; // add_waypoint | set_yaw | start | stop | clear_all |
+                      // teleop_mode | speed_up | speed_down | steer_left |
+                      // steer_right | speed_reset | steer_reset |
+                      // start_process | stop_process |
+                      // restart_jetson | shutdown_jetson
   final Map<String, dynamic> params;
 
   const LlmAction({required this.type, this.params = const {}});
@@ -16,6 +20,15 @@ class LlmAction {
     final params = Map<String, dynamic>.from(json)..remove('action');
     return LlmAction(type: type, params: params);
   }
+
+  /// 차량 컴퓨터 재부팅/종료처럼 실행 중인 미션을 중단시킬 수 있는 고위험 액션.
+  /// LLM 패널 UI에서 이 액션들은 실행 전 별도 확인 다이얼로그를 한 번 더 거친다.
+  static const Set<String> highRiskTypes = {
+    'restart_jetson',
+    'shutdown_jetson',
+  };
+
+  bool get requiresConfirmation => highRiskTypes.contains(type);
 }
 
 class LlmResult {
@@ -58,4 +71,22 @@ class LlmResult {
       return LlmResult(actions: const [], message: raw);
     }
   }
+}
+
+/// GcsController.executeLlmActions()의 실행 결과.
+/// - errors: 즉시 실행을 시도했으나 실패한 액션의 사유 목록
+/// - pendingConfirmations: 고위험 액션(LlmAction.requiresConfirmation)으로
+///   분류되어 아직 실행되지 않은 액션 목록. 호출 측 UI가 사용자 확인을
+///   받은 뒤 GcsController.confirmPendingAction()으로 실행해야 한다.
+class LlmExecutionResult {
+  final List<String> errors;
+  final List<LlmAction> pendingConfirmations;
+
+  const LlmExecutionResult({
+    required this.errors,
+    required this.pendingConfirmations,
+  });
+
+  bool get hasPending => pendingConfirmations.isNotEmpty;
+  bool get hasErrors => errors.isNotEmpty;
 }

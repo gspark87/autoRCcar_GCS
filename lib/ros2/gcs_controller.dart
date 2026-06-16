@@ -9,6 +9,7 @@ import 'rosbridge_service.dart';
 import '../models/occupancy_grid.dart';
 import '../models/system_status.dart';
 import '../models/llm_action.dart';
+import '../config/process_definitions.dart';
 
 class GcsController extends ChangeNotifier {
   final RosbridgeService _ros;
@@ -358,53 +359,137 @@ class GcsController extends ChangeNotifier {
 
   // ── LLM 명령 실행 ─────────────────────────────────────────
   // LlmService가 반환한 LlmResult.actions를 순서대로 실제 GCS 동작으로 변환.
-  // 잘못된 파라미터는 건너뛰고 errors 리스트에 사유를 모아 반환.
-  List<String> executeLlmActions(List<LlmAction> actions) {
+  // 고위험 액션(restart_jetson, shutdown_jetson)은 즉시 실행하지 않고
+  // pendingConfirmations로 분리하여 반환한다. 호출 측(LlmPanel)이 사용자
+  // 확인을 받은 뒤 confirmPendingAction()으로 실제 실행해야 한다.
+  LlmExecutionResult executeLlmActions(List<LlmAction> actions) {
     final errors = <String>[];
+    final pending = <LlmAction>[];
 
     for (final action in actions) {
-      try {
-        switch (action.type) {
-          case 'add_waypoint':
-            final x = _asDouble(action.params['x']);
-            final y = _asDouble(action.params['y']);
-            if (x == null || y == null) {
-              errors.add('add_waypoint: x/y 값이 올바르지 않습니다.');
-              break;
-            }
-            addWaypointENU(x, y);
-            break;
-
-          case 'set_yaw':
-            final yaw = _asDouble(action.params['yaw']);
-            if (yaw == null) {
-              errors.add('set_yaw: yaw 값이 올바르지 않습니다.');
-              break;
-            }
-            sendSetYaw(yaw);
-            break;
-
-          case 'start':
-            sendStart();
-            break;
-
-          case 'stop':
-            sendStop();
-            break;
-
-          case 'clear_all':
-            clearAll();
-            break;
-
-          default:
-            errors.add('알 수 없는 명령: ${action.type}');
-        }
-      } catch (e) {
-        errors.add('${action.type} 실행 중 오류: $e');
+      if (action.requiresConfirmation) {
+        pending.add(action);
+        continue;
       }
+      final error = _runAction(action);
+      if (error != null) errors.add(error);
     }
 
-    return errors;
+    return LlmExecutionResult(errors: errors, pendingConfirmations: pending);
+  }
+
+  /// LlmPanel에서 확인 다이얼로그를 거친 고위험 액션을 실제로 실행.
+  /// 반환값이 null이 아니면 실행 실패 사유.
+  String? confirmPendingAction(LlmAction action) => _runAction(action);
+
+  /// 실제 액션 실행. 성공 시 null, 실패 시 에러 메시지 반환.
+  String? _runAction(LlmAction action) {
+    try {
+      switch (action.type) {
+        // ── VEHICLE 탭 ──────────────────────────────────────
+        case 'add_waypoint':
+          final x = _asDouble(action.params['x']);
+          final y = _asDouble(action.params['y']);
+          if (x == null || y == null) {
+            return 'add_waypoint: x/y 값이 올바르지 않습니다.';
+          }
+          addWaypointENU(x, y);
+          return null;
+
+        case 'set_yaw':
+          final yaw = _asDouble(action.params['yaw']);
+          if (yaw == null) return 'set_yaw: yaw 값이 올바르지 않습니다.';
+          sendSetYaw(yaw);
+          return null;
+
+        case 'start':
+          sendStart();
+          return null;
+
+        case 'stop':
+          sendStop();
+          return null;
+
+        case 'clear_all':
+          clearAll();
+          return null;
+
+        // ── MANUAL 탭 (teleop 모드에서만 유효한 동작은 가드 적용) ──
+        case 'teleop_mode':
+          // mode: 0=STOP, 1=TELEOP, 2=AUTO
+          final mode = action.params['mode'];
+          final modeInt = mode is num
+              ? mode.toInt()
+              : int.tryParse(mode?.toString() ?? '');
+          if (modeInt == null || modeInt < 0 || modeInt > 2) {
+            return 'teleop_mode: mode 값은 0(STOP)/1(TELEOP)/2(AUTO) 중 하나여야 합니다.';
+          }
+          sendTeleopCommand(modeInt);
+          return null;
+
+        case 'speed_up':
+          if (!isTeleop) return 'speed_up: TELEOP 모드에서만 사용할 수 있습니다.';
+          teleopSpeedUp();
+          return null;
+
+        case 'speed_down':
+          if (!isTeleop) return 'speed_down: TELEOP 모드에서만 사용할 수 있습니다.';
+          teleopSpeedDown();
+          return null;
+
+        case 'steer_left':
+          if (!isTeleop) return 'steer_left: TELEOP 모드에서만 사용할 수 있습니다.';
+          teleopSteerLeft();
+          return null;
+
+        case 'steer_right':
+          if (!isTeleop) return 'steer_right: TELEOP 모드에서만 사용할 수 있습니다.';
+          teleopSteerRight();
+          return null;
+
+        case 'speed_reset':
+          if (!isTeleop) return 'speed_reset: TELEOP 모드에서만 사용할 수 있습니다.';
+          sendSpeedReset();
+          return null;
+
+        case 'steer_reset':
+          if (!isTeleop) return 'steer_reset: TELEOP 모드에서만 사용할 수 있습니다.';
+          sendSteerReset();
+          return null;
+
+        // ── RUN 탭 (id는 kValidProcessIds 화이트리스트로 검증) ──
+        case 'start_process':
+          final id = action.params['id'] as String?;
+          if (id == null || !kValidProcessIds.contains(id)) {
+            return 'start_process: 알 수 없는 프로세스 id "$id".';
+          }
+          startProcess(id);
+          return null;
+
+        case 'stop_process':
+          final id = action.params['id'] as String?;
+          if (id == null || !kValidProcessIds.contains(id)) {
+            return 'stop_process: 알 수 없는 프로세스 id "$id".';
+          }
+          stopProcess(id);
+          return null;
+
+        // ── SYSTEM 탭 (고위험: executeLlmActions에서 미리 분리되므로
+        //    여기 도달하는 경우는 confirmPendingAction을 통한 호출뿐) ──
+        case 'restart_jetson':
+          restartJetson();
+          return null;
+
+        case 'shutdown_jetson':
+          shutdownJetson();
+          return null;
+
+        default:
+          return '알 수 없는 명령: ${action.type}';
+      }
+    } catch (e) {
+      return '${action.type} 실행 중 오류: $e';
+    }
   }
 
   double? _asDouble(dynamic v) {

@@ -8,12 +8,20 @@
 //   "actions": [
 //     {"action": "add_waypoint", "x": 3.0, "y": 0.0},
 //     {"action": "set_yaw", "yaw": 90.0},
-//     {"action": "start"},
-//     {"action": "stop"},
-//     {"action": "clear_all"}
+//     {"action": "start"}, {"action": "stop"}, {"action": "clear_all"},
+//     {"action": "teleop_mode", "mode": 1},
+//     {"action": "speed_up"}, {"action": "speed_down"},
+//     {"action": "steer_left"}, {"action": "steer_right"},
+//     {"action": "speed_reset"}, {"action": "steer_reset"},
+//     {"action": "start_process", "id": "ins_gnss"},
+//     {"action": "stop_process", "id": "ins_gnss"},
+//     {"action": "restart_jetson"}, {"action": "shutdown_jetson"}
 //   ],
 //   "message": "사용자에게 보여줄 짧은 설명"
 // }
+// restart_jetson/shutdown_jetson은 GcsController.executeLlmActions에서
+// 고위험 액션으로 분류되어 즉시 실행되지 않고 LlmPanel의 확인 다이얼로그를
+// 거친 뒤에만 실행된다.
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -24,13 +32,15 @@ class LlmService {
   static const _openAiUrl = 'https://api.openai.com/v1/chat/completions';
   static const _anthropicVersion = '2023-06-01';
 
-  /// 차량 좌표계(ENU, East/North/Up [m])와 현재 yaw를 기준으로
-  /// LLM이 add_waypoint/set_yaw 등을 올바르게 생성하도록 안내하는 시스템 프롬프트.
+  /// 차량 좌표계(ENU, East/North/Up [m])와 현재 yaw, teleop 상태, RUN 탭
+  /// 프로세스 목록을 기준으로 LLM이 정확한 액션을 생성하도록 안내하는 시스템 프롬프트.
   String _buildSystemPrompt({
     required double currentEast,
     required double currentNorth,
     required double currentYawDeg,
     required bool hasOrigin,
+    required bool isTeleop,
+    required List<String> validProcessIds,
   }) {
     return '''
 당신은 자율주행 RC카 GCS(Ground Control Station)의 명령 변환기입니다.
@@ -42,21 +52,47 @@ class LlmService {
   "message": "<사용자에게 보여줄 한국어 한두 문장 설명>"
 }
 
-action object는 다음 중 하나의 형태만 가능합니다:
+action object는 다음 중 하나의 형태만 가능합니다.
+
+[VEHICLE 탭 - 경로/주행 제어]
 - {"action": "add_waypoint", "x": <East 미터, number>, "y": <North 미터, number>}
 - {"action": "set_yaw", "yaw": <진북 기준 yaw 각도(deg), -180~180>}
-- {"action": "start"}
-- {"action": "stop"}
-- {"action": "clear_all"}
+- {"action": "start"} : 자율주행 시작
+- {"action": "stop"} : 자율주행 정지
+- {"action": "clear_all"} : 경로/궤적 전체 삭제
 
-좌표계 규칙:
+[MANUAL 탭 - 수동 조작, teleop 모드(mode=1)일 때만 동작]
+- {"action": "teleop_mode", "mode": <0=STOP, 1=TELEOP, 2=AUTO, integer>}
+- {"action": "speed_up"} : 속도 +0.1
+- {"action": "speed_down"} : 속도 -0.1
+- {"action": "steer_left"} : 조향 좌측 +1deg
+- {"action": "steer_right"} : 조향 우측 -1deg
+- {"action": "speed_reset"} : 속도 0으로 초기화
+- {"action": "steer_reset"} : 조향 0으로 초기화
+
+[RUN 탭 - ROS2 프로세스 제어. id는 아래 목록 중 정확히 일치해야 함]
+- {"action": "start_process", "id": "<process id>"}
+- {"action": "stop_process", "id": "<process id>"}
+유효한 process id 목록: ${validProcessIds.join(', ')}
+
+[SYSTEM 탭 - 차량 컴퓨터(Jetson) 전원 제어. 고위험: 반드시 사용자 확인을 받은 후 실행됨]
+- {"action": "restart_jetson"} : Jetson 재부팅
+- {"action": "shutdown_jetson"} : Jetson 종료
+
+현재 상태:
+- 위치(ENU): East=$currentEast m, North=$currentNorth m
+- yaw=$currentYawDeg deg (진북=0, 시계방향 증가)
+- teleop 모드: ${isTeleop ? "활성화(TELEOP)" : "비활성화"} → speed_up/speed_down/steer_left/steer_right/speed_reset/steer_reset은 teleop 모드가 활성화되어 있지 않으면 실행되지 않으니, 비활성 상태에서 이 명령이 필요하면 actions에 {"action":"teleop_mode","mode":1}을 먼저 추가하세요.
+- origin(GPS 기준점) 설정 여부: ${hasOrigin ? "설정됨" : "설정되지 않음 (좌표가 부정확할 수 있음을 message에 안내)"}
+
+규칙:
 - x = East(동쪽, +), y = North(북쪽, +). 단위는 미터.
-- 차량의 현재 위치는 (East=$currentEast, North=$currentNorth), 현재 yaw=$currentYawDeg deg (진북=0, 시계방향 증가) 입니다.
 - "앞으로 N미터"처럼 차량 기준 상대 명령은 현재 yaw 방향을 기준으로 East/North 변위를 계산해 add_waypoint의 절대 좌표(x,y)로 변환하세요.
   예: yaw=0(북쪽)이면 "앞으로 3m" → 현재 위치에서 North가 +3.
 - 여러 waypoint를 순서대로 요구하면 actions 배열에 add_waypoint를 순서대로 여러 개 넣으세요.
-- origin(GPS 기준점) 설정 여부: ${hasOrigin ? "설정됨" : "설정되지 않음 (좌표가 부정확할 수 있음을 message에 안내)"}.
+- 여러 동작이 필요한 복합 명령(예: "수동모드로 바꾸고 속도 올려줘")은 actions 배열에 순서대로 모두 나열하세요.
 - 명령이 모호하거나 위 액션으로 표현할 수 없으면 actions를 빈 배열로 두고 message에 이유를 설명하세요.
+- 위 목록에 없는 process id나 잘못된 mode 값을 임의로 만들어내지 마세요. 확실하지 않으면 actions를 비우고 message에 이유를 설명하세요.
 - 순수 JSON 객체 하나만 출력하세요. 코드블록(```)도 사용하지 마세요.
 ''';
   }
@@ -68,12 +104,16 @@ action object는 다음 중 하나의 형태만 가능합니다:
     required double currentNorth,
     required double currentYawDeg,
     required bool hasOrigin,
+    required bool isTeleop,
+    required List<String> validProcessIds,
   }) async {
     final systemPrompt = _buildSystemPrompt(
       currentEast: currentEast,
       currentNorth: currentNorth,
       currentYawDeg: currentYawDeg,
       hasOrigin: hasOrigin,
+      isTeleop: isTeleop,
+      validProcessIds: validProcessIds,
     );
 
     switch (settings.provider) {
