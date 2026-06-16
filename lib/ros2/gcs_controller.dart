@@ -8,6 +8,7 @@ import '../math/cubic_spline.dart';
 import 'rosbridge_service.dart';
 import '../models/occupancy_grid.dart';
 import '../models/system_status.dart';
+import '../models/llm_action.dart';
 
 class GcsController extends ChangeNotifier {
   final RosbridgeService _ros;
@@ -354,6 +355,67 @@ class GcsController extends ChangeNotifier {
   String exportPathToText() {
     return waypoints.map((w) => '${w.x} ${w.y}').join('\n');
   }
+
+  // ── LLM 명령 실행 ─────────────────────────────────────────
+  // LlmService가 반환한 LlmResult.actions를 순서대로 실제 GCS 동작으로 변환.
+  // 잘못된 파라미터는 건너뛰고 errors 리스트에 사유를 모아 반환.
+  List<String> executeLlmActions(List<LlmAction> actions) {
+    final errors = <String>[];
+
+    for (final action in actions) {
+      try {
+        switch (action.type) {
+          case 'add_waypoint':
+            final x = _asDouble(action.params['x']);
+            final y = _asDouble(action.params['y']);
+            if (x == null || y == null) {
+              errors.add('add_waypoint: x/y 값이 올바르지 않습니다.');
+              break;
+            }
+            addWaypointENU(x, y);
+            break;
+
+          case 'set_yaw':
+            final yaw = _asDouble(action.params['yaw']);
+            if (yaw == null) {
+              errors.add('set_yaw: yaw 값이 올바르지 않습니다.');
+              break;
+            }
+            sendSetYaw(yaw);
+            break;
+
+          case 'start':
+            sendStart();
+            break;
+
+          case 'stop':
+            sendStop();
+            break;
+
+          case 'clear_all':
+            clearAll();
+            break;
+
+          default:
+            errors.add('알 수 없는 명령: ${action.type}');
+        }
+      } catch (e) {
+        errors.add('${action.type} 실행 중 오류: $e');
+      }
+    }
+
+    return errors;
+  }
+
+  double? _asDouble(dynamic v) {
+    if (v is num) return v.toDouble();
+    if (v is String) return double.tryParse(v);
+    return null;
+  }
+
+  /// LLM 시스템 프롬프트에 현재 위치 컨텍스트를 제공하기 위한 현재 ENU 위치.
+  double get currentEast => navState?.position.x ?? 0.0;
+  double get currentNorth => navState?.position.y ?? 0.0;
 
   @override
   void dispose() {

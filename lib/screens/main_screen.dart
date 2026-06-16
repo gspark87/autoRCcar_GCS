@@ -15,6 +15,7 @@ import 'widgets/occupancy_grid_view.dart';
 import 'widgets/enu_plot_view.dart';
 import 'widgets/run_panel.dart';
 import 'widgets/system_monitor_panel.dart';
+import 'widgets/llm_panel.dart';
 
 enum MapMode { osm, occupancyGrid, enuPlot }
 
@@ -51,24 +52,28 @@ class _MainScreenState extends State<MainScreen> {
         appBar: _buildAppBar(ctrl),
         body: Row(
           children: [
-            // ── 지도 영역 (60%) ─────────────────────────────
+            // ── 지도/점유격자맵/차트 + LLM 패널 영역 ───────────
             Expanded(
               flex: 6,
               child: Column(
                 children: [
                   _buildMapModeSelector(),
-                    Expanded(
-                      child: switch (_mapMode) {
-                        MapMode.osm => Stack(
-                            children: [
-                              _buildMap(ctrl),
-                              _buildMapOverlay(ctrl),
-                            ],
-                          ),
-                        MapMode.occupancyGrid => OccupancyGridView(ctrl: ctrl),
-                        MapMode.enuPlot => EnuPlotView(ctrl: ctrl),
-                      },
-                    ),
+                  // 지도 표시 영역: 기존보다 비율을 줄여 하단 LLM 패널 공간 확보
+                  Expanded(
+                    flex: 7,
+                    child: switch (_mapMode) {
+                      MapMode.osm => Stack(
+                          children: [
+                            _buildMap(ctrl),
+                            _buildMapOverlay(ctrl),
+                          ],
+                        ),
+                      MapMode.occupancyGrid => OccupancyGridView(ctrl: ctrl),
+                      MapMode.enuPlot => EnuPlotView(ctrl: ctrl),
+                    },
+                  ),
+                  // ── LLM 자연어 명령 인터페이스 ──────────────
+                  LlmPanel(ctrl: ctrl),
                 ],
               ),
             ),
