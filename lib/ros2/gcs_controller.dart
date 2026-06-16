@@ -87,9 +87,9 @@ class GcsController extends ChangeNotifier {
   void stopProcess(String name) => _ros.publishProcessCommand(name, 'stop');
 
   // ── ROS 연결 ─────────────────────────────────────────────
-  void connect(String host, int port) {
+  Future<void> connect(String host, int port) async {
     _ros.updateAddress(host, port);
-    _ros.connect();
+    await _ros.connect();
   }
 
   void disconnect() => _ros.disconnect();

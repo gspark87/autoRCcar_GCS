@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/nav_state.dart';
 import '../models/control_command.dart';
@@ -42,7 +43,10 @@ class RosbridgeService {
     _port = port;
   }
 
-  void connect() {
+  /// 연결 시도 타임아웃 (호스트가 응답하지 않을 때 무한 대기 방지)
+  static const Duration _connectTimeout = Duration(seconds: 5);
+
+  Future<void> connect() async {
     if (_state == ConnectionState.connected ||
         _state == ConnectionState.connecting) return;
 
@@ -50,7 +54,20 @@ class RosbridgeService {
     final uri = Uri.parse('ws://$_host:$_port');
 
     try {
-      _channel = WebSocketChannel.connect(uri);
+      final channel = WebSocketChannel.connect(uri);
+
+      // WebSocketChannel.connect()는 즉시 채널 객체를 반환하지만,
+      // 실제 핸드셰이크 성공 여부는 channel.ready Future로 확인해야 함.
+      // 이 await 전에는 connected 상태로 전환하지 않는다.
+      await channel.ready.timeout(_connectTimeout);
+
+      // 대기 중 disconnect()가 호출된 경우 연결을 즉시 정리하고 중단
+      if (_state != ConnectionState.connecting) {
+        await channel.sink.close();
+        return;
+      }
+
+      _channel = channel;
       _sub = _channel!.stream.listen(
         _onMessage,
         onError: _onError,
@@ -65,6 +82,9 @@ class RosbridgeService {
 
   void disconnect() {
     _reconnectTimer?.cancel();
+    if (_state == ConnectionState.connected) {
+      _unsubscribeAll();
+    }
     _sub?.cancel();
     _channel?.sink.close();
     _channel = null;
@@ -104,9 +124,15 @@ class RosbridgeService {
   }
 
   void _unsubscribeAll() {
-    _send({'op': 'unsubscribe', 'topic': 'nav_topic'});
-    _send({'op': 'unsubscribe', 'topic': 'hardware_control/teleop_mode'});
-    _send({'op': 'unsubscribe', 'topic': 'hardware_control/control_command'});
+    _unsubscribe('nav_topic');
+    _unsubscribe('hardware_control/teleop_mode');
+    _unsubscribe('hardware_control/control_command');
+    _unsubscribe('hardware_control/pwm_command');
+    _unsubscribe('util/process_status');
+    _unsubscribe('util/system_status');
+    if (_occupancyGridSubscribed) {
+      _unsubscribe('occupancy_grid');
+    }
   }
 
   // ── Publish ──────────────────────────────────────────────
@@ -146,7 +172,9 @@ class RosbridgeService {
     if (_state != ConnectionState.connected) return;
     try {
       _channel?.sink.add(jsonEncode(data));
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) debugPrint('[rosbridge] send failed: $e (data=$data)');
+    }
   }
 
   void _onMessage(dynamic raw) {
@@ -179,23 +207,32 @@ class RosbridgeService {
               final parsed = jsonDecode(dataStr) as Map<String, dynamic>;
               onProcessStatus?.call(parsed.map((k, v) => MapEntry(k, v.toString())));
             }
-          } catch (_) {}
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('[rosbridge] process_status parse failed: $e (raw=${msg['data']})');
+            }
+          }
           break;
         case 'util/system_status':
-          // print('system_status received: ${msg['data']}'); // ← 추가
           try {
             final dataStr = msg['data'] as String?;
             if (dataStr != null) {
               final parsed = jsonDecode(dataStr) as Map<String, dynamic>;
               onSystemStatus?.call(SystemStatus.fromJson(parsed));
             }
-          } catch (_) {}
+          } catch (e) {
+            if (kDebugMode) {
+              debugPrint('[rosbridge] system_status parse failed: $e (raw=${msg['data']})');
+            }
+          }
           break;
         case 'occupancy_grid':
           onOccupancyGrid?.call(OccupancyGridMsg.fromRosMsg(msg));
           break;
       }
-    } catch (_) {}
+    } catch (e) {
+      if (kDebugMode) debugPrint('[rosbridge] onMessage failed: $e (raw=$raw)');
+    }
   }
 
   void _onError(dynamic error) {
