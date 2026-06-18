@@ -16,6 +16,7 @@ import 'widgets/enu_plot_view.dart';
 import 'widgets/run_panel.dart';
 import 'widgets/system_monitor_panel.dart';
 import 'widgets/llm_panel.dart';
+import 'widgets/camera_overlay_widget.dart';
 
 enum MapMode { osm, occupancyGrid, enuPlot }
 
@@ -29,7 +30,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   final MapController _mapController = MapController();
   bool _isSettingOrigin = false;
-  double _currentZoom = 18.0; // ← 추가
+  double _currentZoom = 18.0;
+  bool _showCamera = true;
 
   MapMode _mapMode = MapMode.osm;
 
@@ -37,10 +39,18 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<GcsController>().onOriginSet = (latLng) {
+      final ctrl = context.read<GcsController>();
+      ctrl.onOriginSet = (latLng) {
         _mapController.move(latLng, 18);
       };
+      ctrl.enableCamera();
     });
+  }
+
+  @override
+  void dispose() {
+    context.read<GcsController>().disableCamera();
+    super.dispose();
   }
 
   @override
@@ -460,11 +470,12 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildMapOverlay(GcsController ctrl) {
-    final connectivity = context.watch<ConnectivityService>(); // ← 추가
+    final connectivity = context.watch<ConnectivityService>();
+    final isConnected = ctrl.connectionState == rb.ConnectionState.connected;
 
     return Stack(
       children: [
-        // 좌측 상단: 온라인/오프라인 상태  ← 새로 추가
+        // 좌측 상단: 온라인/오프라인 상태
         if (connectivity.checked)
           Positioned(
             top: 16,
@@ -494,13 +505,25 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ),
-        // 좌측 하단 오버레이
+        // 좌측 하단: 카메라 영상 + 텍스트 오버레이
         Positioned(
           bottom: 16,
           left: 16,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
+              // 카메라 영상 (토글 가능)
+              if (_showCamera)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: CameraOverlayWidget(
+                    imageStream: ctrl.cameraStream,
+                    isConnected: isConnected,
+                    onClose: () => setState(() => _showCamera = false),
+                  ),
+                ),
+              // 기존 텍스트 오버레이
               if (_isSettingOrigin)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -548,6 +571,27 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
         ),
+        // 카메라 숨김 상태일 때 복원 버튼
+        if (!_showCamera)
+          Positioned(
+            bottom: 50,
+            left: 16,
+            child: Tooltip(
+              message: '카메라 영상 표시',
+              child: InkWell(
+                onTap: () => setState(() => _showCamera = true),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: const Icon(Icons.videocam, color: Colors.white54, size: 18),
+                ),
+              ),
+            ),
+          ),
         // 우측 하단 Zoom 표시
         Positioned(
           bottom: 16,
@@ -559,7 +603,7 @@ class _MainScreenState extends State<MainScreen> {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              'Zoom: ${_currentZoom.toStringAsFixed(1)}', // ← 수정
+              'Zoom: ${_currentZoom.toStringAsFixed(1)}',
               style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 11,

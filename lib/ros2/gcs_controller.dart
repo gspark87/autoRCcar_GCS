@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/nav_state.dart';
@@ -97,6 +98,13 @@ class GcsController extends ChangeNotifier {
 
   void enableOccupancyGrid() => _ros.subscribeOccupancyGrid();
   void disableOccupancyGrid() => _ros.unsubscribeOccupancyGrid();
+
+  // ── 카메라 스트림 ─────────────────────────────────────────
+  Stream<Uint8List> get cameraStream => _ros.cameraStream;
+
+  void enableCamera({String topic = '/camera/image_raw/compressed'}) =>
+      _ros.subscribeCamera(topic: topic);
+  void disableCamera() => _ros.unsubscribeCamera();
 
   // ── Nav 콜백 ─────────────────────────────────────────────
   void _onNavState(NavState msg) {

@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../models/nav_state.dart';
@@ -30,6 +31,14 @@ class RosbridgeService {
   Function(OccupancyGridMsg)? onOccupancyGrid;
   Function(Map<String, String>)? onProcessStatus;
   Function(SystemStatus)? onSystemStatus;
+
+  // 카메라 이미지 스트림 (CompressedImage → JPEG bytes)
+  final StreamController<Uint8List> _cameraStreamController =
+      StreamController<Uint8List>.broadcast();
+  Stream<Uint8List> get cameraStream => _cameraStreamController.stream;
+
+  bool _cameraSubscribed = false;
+  String _cameraTopicName = '/camera/image_raw/compressed';
 
   ConnectionState _state = ConnectionState.disconnected;
   ConnectionState get state => _state;
@@ -105,6 +114,11 @@ class RosbridgeService {
       _subscribe('occupancy_grid', 'nav_msgs/msg/OccupancyGrid',
           throttleRateMs: 1000, queueLength: 1);
     }
+
+    if (_cameraSubscribed) {
+      _subscribe(_cameraTopicName, 'sensor_msgs/msg/CompressedImage',
+          throttleRateMs: 100, queueLength: 1);
+    }
   }
 
   void _subscribe(String topic, String type,
@@ -132,6 +146,9 @@ class RosbridgeService {
     _unsubscribe('util/system_status');
     if (_occupancyGridSubscribed) {
       _unsubscribe('occupancy_grid');
+    }
+    if (_cameraSubscribed) {
+      _unsubscribe(_cameraTopicName);
     }
   }
 
@@ -229,6 +246,17 @@ class RosbridgeService {
         case 'occupancy_grid':
           onOccupancyGrid?.call(OccupancyGridMsg.fromRosMsg(msg));
           break;
+        default:
+          if (topic == _cameraTopicName) {
+            final dataStr = msg['data'] as String?;
+            if (dataStr != null && !_cameraStreamController.isClosed) {
+              try {
+                _cameraStreamController.add(base64Decode(dataStr));
+              } catch (e) {
+                if (kDebugMode) debugPrint('[rosbridge] camera decode failed: $e');
+              }
+            }
+          }
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[rosbridge] onMessage failed: $e (raw=$raw)');
@@ -264,6 +292,27 @@ class RosbridgeService {
     }
   }
 
+  void subscribeCamera({
+    String topic = '/camera/image_raw/compressed',
+    int throttleRateMs = 100,
+  }) {
+    if (_cameraSubscribed) return;
+    _cameraSubscribed = true;
+    _cameraTopicName = topic;
+    if (_state == ConnectionState.connected) {
+      _subscribe(topic, 'sensor_msgs/msg/CompressedImage',
+          throttleRateMs: throttleRateMs, queueLength: 1);
+    }
+  }
+
+  void unsubscribeCamera() {
+    if (!_cameraSubscribed) return;
+    _cameraSubscribed = false;
+    if (_state == ConnectionState.connected) {
+      _unsubscribe(_cameraTopicName);
+    }
+  }
+
   void publishProcessCommand(String name, String action) {
     final payload = jsonEncode({'name': name, 'action': action});
     _publish('util/process_command', 'std_msgs/msg/String', {'data': payload});
@@ -291,5 +340,6 @@ class RosbridgeService {
 
   void dispose() {
     disconnect();
+    _cameraStreamController.close();
   }
 }
