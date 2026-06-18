@@ -32,6 +32,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _isSettingOrigin = false;
   double _currentZoom = 18.0;
   bool _showCamera = true;
+  late GcsController _ctrl;
 
   MapMode _mapMode = MapMode.osm;
 
@@ -39,17 +40,17 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctrl = context.read<GcsController>();
-      ctrl.onOriginSet = (latLng) {
+      _ctrl = context.read<GcsController>();
+      _ctrl.onOriginSet = (latLng) {
         _mapController.move(latLng, 18);
       };
-      ctrl.enableCamera();
+      _ctrl.enableCamera();
     });
   }
 
   @override
   void dispose() {
-    context.read<GcsController>().disableCamera();
+    _ctrl.disableCamera();
     super.dispose();
   }
 
