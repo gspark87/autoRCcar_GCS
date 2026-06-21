@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 class CameraOverlayWidget extends StatelessWidget {
   final Stream<Uint8List> imageStream;
   final bool isConnected;
+  final bool isCameraActive;
   final VoidCallback onClose;
 
   const CameraOverlayWidget({
     super.key,
     required this.imageStream,
     required this.isConnected,
+    required this.isCameraActive,
     required this.onClose,
   });
 
@@ -76,7 +78,7 @@ class CameraOverlayWidget extends StatelessWidget {
     return StreamBuilder<Uint8List>(
       stream: imageStream,
       builder: (context, snapshot) {
-        if (snapshot.hasData) {
+        if (isCameraActive && snapshot.hasData) {
           return ClipRRect(
             borderRadius: const BorderRadius.only(
               bottomLeft: Radius.circular(4),

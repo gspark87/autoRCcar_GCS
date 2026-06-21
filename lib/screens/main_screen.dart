@@ -521,6 +521,7 @@ class _MainScreenState extends State<MainScreen> {
                   child: CameraOverlayWidget(
                     imageStream: ctrl.cameraStream,
                     isConnected: isConnected,
+                    isCameraActive: ctrl.processStatus['gscam'] == 'running',
                     onClose: () => setState(() => _showCamera = false),
                   ),
                 ),
