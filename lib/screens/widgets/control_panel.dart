@@ -34,7 +34,7 @@ class _ControlPanelState extends State<ControlPanel> {
           // _modeBanner(),
           // const SizedBox(height: 10),
 
-          // Clear All 한 줄
+          // clear all (single row)
           _gcsButton(
             label: 'Clear All',
             icon: Icons.clear_all,
@@ -43,7 +43,7 @@ class _ControlPanelState extends State<ControlPanel> {
           ),
           const SizedBox(height: 6),
           
-          // Send Path 한 줄
+          // send path (single row)
           _gcsButton(
             label: 'Send Path',
             icon: Icons.send,
@@ -52,7 +52,7 @@ class _ControlPanelState extends State<ControlPanel> {
           ),
           const SizedBox(height: 6),
 
-          // Import Path / Export Path 2열
+          // import path / export path (two columns)
           Row(
             children: [
               Expanded(
@@ -80,7 +80,7 @@ class _ControlPanelState extends State<ControlPanel> {
           ),
           const SizedBox(height: 6),
 
-          // Set Origin / Set Yaw 2열
+          // set origin / set yaw (two columns)
           Row(
             children: [
               Expanded(

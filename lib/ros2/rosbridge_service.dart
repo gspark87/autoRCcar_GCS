@@ -22,7 +22,7 @@ class RosbridgeService {
   String _host;
   int _port;
 
-  // 콜백
+  // callbacks
   Function(NavState)? onNavState;
   Function(bool)? onTeleopMode;
   Function(ControlCommand)? onControlCommand;
@@ -32,7 +32,7 @@ class RosbridgeService {
   Function(Map<String, String>)? onProcessStatus;
   Function(SystemStatus)? onSystemStatus;
 
-  // 카메라 이미지 스트림 (CompressedImage → JPEG bytes)
+  // camera image stream (CompressedImage → JPEG bytes)
   final StreamController<Uint8List> _cameraStreamController =
       StreamController<Uint8List>.broadcast();
   Stream<Uint8List> get cameraStream => _cameraStreamController.stream;
@@ -52,7 +52,7 @@ class RosbridgeService {
     _port = port;
   }
 
-  /// 연결 시도 타임아웃 (호스트가 응답하지 않을 때 무한 대기 방지)
+  /// connection attempt timeout (prevents infinite wait when host is unresponsive)
   static const Duration _connectTimeout = Duration(seconds: 5);
 
   Future<void> connect() async {
@@ -65,12 +65,12 @@ class RosbridgeService {
     try {
       final channel = WebSocketChannel.connect(uri);
 
-      // WebSocketChannel.connect()는 즉시 채널 객체를 반환하지만,
-      // 실제 핸드셰이크 성공 여부는 channel.ready Future로 확인해야 함.
-      // 이 await 전에는 connected 상태로 전환하지 않는다.
+      // WebSocketChannel.connect() returns the channel object immediately,
+      // but actual handshake success must be checked via the channel.ready Future.
+      // do not transition to connected state before this await.
       await channel.ready.timeout(_connectTimeout);
 
-      // 대기 중 disconnect()가 호출된 경우 연결을 즉시 정리하고 중단
+      // if disconnect() was called while waiting, clean up and abort
       if (_state != ConnectionState.connecting) {
         await channel.sink.close();
         return;
@@ -100,7 +100,7 @@ class RosbridgeService {
     _setState(ConnectionState.disconnected);
   }
 
-  bool _occupancyGridSubscribed = false; // ← 클래스 필드로 추가
+  bool _occupancyGridSubscribed = false;
 
   void _subscribeTopics() {
     _subscribe('nav_topic', 'autorccar_interfaces/msg/NavState');

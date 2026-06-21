@@ -1,8 +1,8 @@
 // lib/screens/widgets/run_panel.dart
 //
-// autorccar 패키지들의 실행/종료를 제어하는 패널 + rosbag record 제어.
-// 차량 측 autorccar_util/process_manager_node 와
-// /util/process_command (publish), /util/process_status (subscribe) 로 통신.
+// panel for controlling start/stop of autorccar packages + rosbag record.
+// communicates with autorccar_util/process_manager_node on the vehicle via
+// /util/process_command (publish) and /util/process_status (subscribe).
 
 import 'package:flutter/material.dart';
 import '../../ros2/gcs_controller.dart';
@@ -84,7 +84,7 @@ class _ProcessRow extends StatelessWidget {
       case 'stopped':
         return Colors.white38;
       default:
-        return Colors.white24; // unknown (status 토픽 미수신)
+        return Colors.white24; // unknown (status topic not yet received)
     }
   }
 

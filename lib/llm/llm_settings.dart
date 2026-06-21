@@ -1,5 +1,5 @@
 // lib/llm/llm_settings.dart
-// LLM 제공자 선택 및 API 키 저장/로드 (SharedPreferences)
+// LLM provider selection and API key save/load (SharedPreferences)
 
 import 'package:shared_preferences/shared_preferences.dart';
 

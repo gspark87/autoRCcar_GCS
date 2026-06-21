@@ -1,7 +1,7 @@
 // lib/screens/widgets/llm_panel.dart
 //
-// 하단 LLM 인터페이스: 자연어 명령 입력 → API 호출 → JSON 액션 파싱 → GCS 제어.
-// 단일 입력창 + 단일 응답 텍스트박스 (대화 히스토리 없음).
+// bottom LLM interface: natural language input → API call → JSON action parsing → GCS control.
+// single input field + single response text box (no conversation history).
 
 import 'package:flutter/material.dart';
 import '../../config/process_definitions.dart';
@@ -96,7 +96,7 @@ class _LlmPanelState extends State<LlmPanel> {
       final execResult = widget.ctrl.executeLlmActions(result.actions);
       final confirmedErrors = <String>[];
 
-      // 고위험 액션(restart_jetson/shutdown_jetson)은 한 번 더 확인 후 실행
+      // high-risk actions (restart_jetson/shutdown_jetson) require an additional confirmation before execution
       if (execResult.hasPending) {
         for (final action in execResult.pendingConfirmations) {
           final confirmed = await _confirmHighRiskAction(action);
@@ -141,8 +141,8 @@ class _LlmPanelState extends State<LlmPanel> {
         _ => action.type,
       };
 
-  /// 고위험 액션(재부팅/종료) 실행 전 확인 다이얼로그.
-  /// 사용자가 확인하면 true, 취소하면 false.
+  /// confirmation dialog before executing high-risk actions (restart/shutdown).
+  /// returns true if confirmed, false if cancelled.
   Future<bool> _confirmHighRiskAction(LlmAction action) async {
     final label = _describeAction(action);
     final message = switch (action.type) {

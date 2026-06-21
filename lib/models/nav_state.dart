@@ -1,5 +1,5 @@
 // lib/models/nav_state.dart
-// autorccar_interfaces/NavState 에 대응
+// corresponds to autorccar_interfaces/NavState
 
 class Vec3 {
   final double x, y, z;

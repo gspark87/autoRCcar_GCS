@@ -1,8 +1,8 @@
 // lib/screens/widgets/occupancy_grid_view.dart
 //
-// /occupancy_grid (nav_msgs/OccupancyGrid) 를 픽셀 이미지로 변환해 표시.
-// 1000x1000 등 큰 그리드도 ui.Image로 한 번 변환 후 그리므로 빠름.
-// InteractiveViewer로 확대/축소/이동 지원.
+// converts /occupancy_grid (nav_msgs/OccupancyGrid) to a pixel image for display.
+// even large grids (e.g. 1000x1000) are fast because they are converted to ui.Image once and redrawn.
+// supports pan/zoom via InteractiveViewer.
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -49,7 +49,7 @@ class _OccupancyGridViewState extends State<OccupancyGridView> {
       _building = false;
       if (!mounted) return;
       setState(() => _image = img);
-      // 빌드 중 새 데이터가 또 들어왔으면 다시 처리
+      // if new data arrived while building, rebuild
       if (widget.ctrl.occupancyGridVersion != _lastVersion) {
         _maybeRebuild();
       }
@@ -62,8 +62,8 @@ class _OccupancyGridViewState extends State<OccupancyGridView> {
     final pixels = Uint8List(w * h * 4);
 
     for (int row = 0; row < h; row++) {
-      // OccupancyGrid data row 0 = origin(최소 y) → 이미지에서는 아래쪽
-      // 화면 위쪽이 +y(북쪽)가 되도록 세로 반전
+      // OccupancyGrid data row 0 = origin (min y) → bottom in image
+      // flip vertically so +y (north) is at the top of the screen
       final imgRow = h - 1 - row;
       for (int col = 0; col < w; col++) {
         final v = grid.data[row * w + col];
@@ -131,7 +131,7 @@ class _OccupancyGridViewState extends State<OccupancyGridView> {
               ),
             ),
           ),
-          // 정보 표시
+          // info display
           Positioned(
             bottom: 16,
             left: 16,

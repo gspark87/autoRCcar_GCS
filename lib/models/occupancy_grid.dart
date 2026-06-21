@@ -1,8 +1,8 @@
 // lib/models/occupancy_grid.dart
-// nav_msgs/msg/OccupancyGrid 에 대응
+// corresponds to nav_msgs/msg/OccupancyGrid
 //
-// 주의: rosbridge는 int8[]/uint8[] 배열 필드를 JSON 배열이 아닌
-// base64 인코딩된 문자열로 보내는 경우가 많음. 두 경우 모두 처리.
+// note: rosbridge often sends int8[]/uint8[] array fields as
+// base64-encoded strings rather than JSON arrays. both cases are handled.
 
 import 'dart:convert';
 
@@ -10,7 +10,7 @@ class OccupancyGridMsg {
   final int width;
   final int height;
   final double resolution; // [m/cell]
-  final double originX;    // map frame 기준 origin [m]
+  final double originX;    // origin in map frame [m]
   final double originY;
   final List<int> data;    // -1: unknown, 0: free, 100: occupied
 
@@ -32,9 +32,9 @@ class OccupancyGridMsg {
     List<int> data;
 
     if (rawData is String) {
-      // rosbridge가 int8[]/uint8[]를 base64 문자열로 인코딩한 경우
+      // case where rosbridge encoded int8[]/uint8[] as a base64 string
       final bytes = base64.decode(rawData);
-      // uint8(0~255) -> int8(-128~127) 변환
+      // convert uint8 (0~255) to int8 (-128~127)
       data = bytes.map((b) => b > 127 ? b - 256 : b).toList();
     } else if (rawData is List) {
       data = rawData.map((e) => (e as num).toInt()).toList();

@@ -1,8 +1,8 @@
 // lib/map/hybrid_tile_provider.dart
 //
-// flutter_map TileProvider: 온라인(OSM) 우선 시도 → 실패/오프라인 시 MBTiles 사용
-// ConnectivityService가 캐싱한 온라인 상태를 참조하여
-// 오프라인일 때는 네트워크 요청 없이 즉시 MBTiles를 읽음 (지연 최소화)
+// flutter_map TileProvider: tries OSM online first; falls back to MBTiles on failure or offline.
+// references the online status cached by ConnectivityService so that
+// offline mode skips the network and reads MBTiles immediately (minimizes latency)
 
 import 'dart:async';
 import 'dart:typed_data';
@@ -75,7 +75,7 @@ class HybridTileImage extends ImageProvider<HybridTileImage> {
   Future<ui.Codec> _load(ImageDecoderCallback decode) async {
     Uint8List? bytes;
 
-    // 온라인으로 판단된 경우에만 네트워크 시도 (오프라인이면 즉시 mbtiles로)
+    // only attempt network if determined to be online (skip directly to mbtiles when offline)
     if (isOnline) {
       try {
         final url = 'https://tile.openstreetmap.org/$z/$x/$y.png';
@@ -87,14 +87,14 @@ class HybridTileImage extends ImageProvider<HybridTileImage> {
           bytes = res.bodyBytes;
         }
       } catch (_) {
-        // 개별 타일 요청 실패 -> mbtiles로 fallback
+        // individual tile fetch failed — fall back to mbtiles
       }
     }
 
-    // 오프라인 MBTiles
+    // offline MBTiles fallback
     bytes ??= await mbtiles.getTile(z, x, y);
 
-    // 둘 다 없으면 투명 타일
+    // neither source available — return transparent tile
     bytes ??= _transparentPng;
 
     final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
@@ -115,7 +115,7 @@ class HybridTileImage extends ImageProvider<HybridTileImage> {
   int get hashCode => Object.hash(z, x, y, isOnline);
 }
 
-/// 1x1 투명 PNG (둘 다 실패했을 때 표시)
+/// 1×1 transparent PNG returned when both online and offline sources fail
 final Uint8List _transparentPng = Uint8List.fromList([
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
   0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,

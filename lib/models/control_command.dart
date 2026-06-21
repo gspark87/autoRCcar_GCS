@@ -1,5 +1,5 @@
 // lib/models/control_command.dart
-// autorccar_interfaces/msg/ControlCommand 에 대응
+// corresponds to autorccar_interfaces/msg/ControlCommand
 
 class ControlCommand {
   final double speed;

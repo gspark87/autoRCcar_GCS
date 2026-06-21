@@ -1,8 +1,8 @@
 // lib/map/mbtiles_service.dart
 //
-// 앱 assets에 포함된 .mbtiles(sqlite) 파일을 읽어 타일 데이터를 제공.
-// 최초 실행 시 assets → 로컬 파일로 복사 후 sqflite(ffi)로 오픈.
-// metadata 테이블에서 minzoom/maxzoom/bounds(중심좌표)도 함께 읽어둠.
+// reads tile data from a .mbtiles (sqlite) file bundled in app assets.
+// on first run, copies assets → local file and opens with sqflite (ffi).
+// also reads minzoom/maxzoom/bounds (center coordinates) from the metadata table.
 
 import 'dart:io';
 import 'dart:math';
@@ -20,13 +20,13 @@ class MbtilesService {
   int? minZoom;
   int? maxZoom;
 
-  /// bounds 기반 중심 좌표 (minlon,minlat,maxlon,maxlat 의 중앙)
+  /// center coordinates derived from bounds (center of minlon,minlat,maxlon,maxlat)
   LatLng? centerLatLng;
 
-  /// assets에 포함된 mbtiles 파일 경로
+  /// path to the mbtiles file bundled in assets
   static const String _assetPath = 'assets/map.mbtiles';
 
-  /// 로컬에 복사될 파일명
+  /// filename for the local copy
   static const String _localFileName = 'map.mbtiles';
 
   Future<void> init() async {
@@ -53,14 +53,14 @@ class MbtilesService {
 
       await _loadMetadata();
     } catch (e) {
-      // mbtiles asset이 없거나 로드 실패 시 -> 오프라인 지도 사용 불가
+      // mbtiles asset missing or load failed → offline map unavailable
       _initFailed = true;
       _db = null;
     }
   }
 
-  /// metadata 테이블에서 minzoom/maxzoom/bounds 읽기.
-  /// 없으면 tiles 테이블에서 추정.
+  /// reads minzoom/maxzoom/bounds from the metadata table.
+  /// falls back to estimating from the tiles table if not found.
   Future<void> _loadMetadata() async {
     final db = _db;
     if (db == null) return;
@@ -99,7 +99,7 @@ class MbtilesService {
             }
             break;
           case 'center':
-            // 일부 생성기는 "lon,lat" 형태의 center를 직접 제공
+            // some generators provide center directly as "lon,lat"
             final parts = value.split(',').map((s) => double.tryParse(s.trim())).toList();
             if (parts.length >= 2 && parts[0] != null && parts[1] != null) {
               centerLatLng = LatLng(parts[1]!, parts[0]!);
@@ -108,10 +108,10 @@ class MbtilesService {
         }
       }
     } catch (_) {
-      // metadata 테이블이 없는 경우 무시
+      // ignore if metadata table is absent
     }
 
-    // minzoom/maxzoom 없으면 tiles 테이블에서 직접 조회
+    // if minzoom/maxzoom is absent, query directly from the tiles table
     if (minZoom == null || maxZoom == null) {
       try {
         final rows = await db.rawQuery(
@@ -124,7 +124,7 @@ class MbtilesService {
       } catch (_) {}
     }
 
-    // center 없으면 tiles 테이블의 최대 줌 레벨 타일 범위로 추정
+    // if center is absent, estimate from tile bounds at the max zoom level
     if (centerLatLng == null && maxZoom != null) {
       try {
         final rows = await db.rawQuery(
@@ -141,7 +141,7 @@ class MbtilesService {
           if (minX != null && maxX != null && minY != null && maxY != null) {
             final z = maxZoom!;
             final cx = (minX + maxX + 1) / 2.0;
-            // tile_row는 TMS(반전) 좌표이므로 XYZ로 변환
+            // tile_row uses TMS (inverted) coordinates; convert to XYZ
             final cyTms = (minY + maxY + 1) / 2.0;
             final cyXyz = (1 << z) - cyTms;
             centerLatLng = _tileToLatLng(cx, cyXyz, z);
@@ -168,8 +168,8 @@ class MbtilesService {
 
   bool get isAvailable => _db != null && !_initFailed;
 
-  /// XYZ 좌표(z, x, y) -> PNG/JPEG 바이트
-  /// MBTiles는 TMS scheme(y축 반전)을 사용
+  /// returns PNG/JPEG bytes for XYZ coordinates (z, x, y)
+  /// MBTiles uses the TMS scheme (y-axis inverted)
   Future<Uint8List?> getTile(int z, int x, int y) async {
     final db = _db;
     if (db == null) return null;
@@ -188,7 +188,7 @@ class MbtilesService {
 
       Uint8List bytes = result.first['tile_data'] as Uint8List;
 
-      // gzip 압축된 경우 (벡터 타일 등) 압축 해제
+      // decompress if gzip-compressed (e.g. vector tiles)
       if (bytes.length > 2 && bytes[0] == 0x1F && bytes[1] == 0x8B) {
         bytes = Uint8List.fromList(gzip.decode(bytes));
       }

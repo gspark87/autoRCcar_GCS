@@ -1,7 +1,7 @@
 // lib/screens/widgets/llm_settings_dialog.dart
 //
-// connection_dialog.dart와 동일한 스타일의 LLM 연동 설정 다이얼로그.
-// 제공자(Claude/OpenAI) 선택 + API 키 + 모델명 입력, SharedPreferences 저장.
+// LLM integration settings dialog, styled the same as connection_dialog.dart.
+// provider (Claude/OpenAI) selection + API key + model name input, saved via SharedPreferences.
 
 import 'package:flutter/material.dart';
 import '../../llm/llm_settings.dart';

@@ -63,13 +63,13 @@ class _MainScreenState extends State<MainScreen> {
         appBar: _buildAppBar(ctrl),
         body: Row(
           children: [
-            // ── 지도/점유격자맵/차트 + LLM 패널 영역 ───────────
+            // ── map / occupancy grid / chart + LLM panel area ───────────
             Expanded(
               flex: 6,
               child: Column(
                 children: [
                   _buildMapModeSelector(),
-                  // 지도 표시 영역: 기존보다 비율을 줄여 하단 LLM 패널 공간 확보
+                  // map display area: reduced ratio to allow space for the LLM panel below
                   Expanded(
                     flex: 7,
                     child: switch (_mapMode) {
@@ -83,12 +83,12 @@ class _MainScreenState extends State<MainScreen> {
                       MapMode.enuPlot => EnuPlotView(ctrl: ctrl),
                     },
                   ),
-                  // ── LLM 자연어 명령 인터페이스 ──────────────
+                  // ── LLM natural language command interface ──────────────
                   LlmPanel(ctrl: ctrl),
                 ],
               ),
             ),
-            // ── 우측 패널 ────────────────────────────────────
+            // ── right panel ────────────────────────────────────
             Container(
               width: 380,
               color: const Color(0xFF16213E),
@@ -100,7 +100,7 @@ class _MainScreenState extends State<MainScreen> {
                       tabs: [
                         Tab(icon: Icon(Icons.navigation, size: 12), text: 'VEHICLE', height: 40),
                         Tab(icon: Icon(Icons.gamepad, size: 12), text: 'MANUAL', height: 40),
-                        Tab(icon: Icon(Icons.play_circle, size: 12), text: 'RUN', height: 40), // ← 추가
+                        Tab(icon: Icon(Icons.play_circle, size: 12), text: 'RUN', height: 40),
                         Tab(icon: Icon(Icons.monitor_heart, size: 12), text: 'SYSTEM', height: 40),
                       ],
                       labelColor: Colors.white,
@@ -158,7 +158,7 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
       actions: [
-        // 모드 배너 추가
+        // mode banner
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           child: Container(
@@ -183,7 +183,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
         ),
-        // 연결 상태 표시
+        // connection status indicator
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           child: Container(
@@ -240,7 +240,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
         ),
-        // 연결 설정 버튼
+        // connection settings button
         IconButton(
           icon: const Icon(Icons.settings_ethernet, color: Colors.white70),
           tooltip: 'rosbridge 연결 설정',
@@ -255,12 +255,12 @@ class _MainScreenState extends State<MainScreen> {
     final mbtiles = context.read<MbtilesService>();
     final connectivity = context.watch<ConnectivityService>();
 
-    // 우선순위: 차량 위치 > mbtiles 중심 > 기본값
+    // priority: vehicle position > mbtiles center > default
     final center = ctrl.vehiclePosition
         ?? mbtiles.centerLatLng
         ?? const LatLng(37.3595, 127.1052);
 
-    // 오프라인일 때만 mbtiles 줌 범위로 제한
+    // restrict to mbtiles zoom range only when offline
     double minZoom = 1;
     double maxZoom = 19;
     if (!connectivity.isOnline && mbtiles.isAvailable) {
@@ -273,11 +273,11 @@ class _MainScreenState extends State<MainScreen> {
       options: MapOptions(
         initialCenter: center,
         initialZoom: 18,
-        minZoom: minZoom,   // ← 추가
-        maxZoom: maxZoom,   // ← 추가
+        minZoom: minZoom,
+        maxZoom: maxZoom,
         onPositionChanged: (position, hasGesture) {
           setState(() {
-            _currentZoom = position.zoom ?? _currentZoom; // ← 수정
+            _currentZoom = position.zoom ?? _currentZoom;
           });
         },
         onTap: (tapPos, latLng) {
@@ -299,7 +299,7 @@ class _MainScreenState extends State<MainScreen> {
         },
       ),
       children: [
-        // OSM 타일
+        // OSM tiles
         TileLayer(
           tileProvider: HybridTileProvider(
             context.read<MbtilesService>(),
@@ -307,7 +307,7 @@ class _MainScreenState extends State<MainScreen> {
           ),
           userAgentPackageName: 'com.example.autorccar_gcs',
         ),
-        // 주행 궤적
+        // driving trajectory
         if (ctrl.trajectory.isNotEmpty)
           PolylineLayer(
             polylines: [
@@ -318,7 +318,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ],
           ),
-        // Spline 경로
+        // spline path
         if (ctrl.splinePath.isNotEmpty)
           PolylineLayer(
             polylines: [
@@ -329,7 +329,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ],
           ),
-        // Waypoint 연결선
+        // waypoint connection lines
         if (ctrl.waypoints.length >= 2)
           PolylineLayer(
             polylines: [
@@ -340,7 +340,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ],
           ),
-        // Waypoint 마커
+        // waypoint markers
         MarkerLayer(
           markers: [
             // Waypoints
@@ -378,7 +378,7 @@ class _MainScreenState extends State<MainScreen> {
                 ),
               );
             }),
-            // 차량 마커
+            // vehicle marker
             if (ctrl.vehiclePosition != null)
               Marker(
                 point: ctrl.vehiclePosition!,
@@ -394,7 +394,7 @@ class _MainScreenState extends State<MainScreen> {
                   ),
                 ),
               ),
-            // Origin 마커
+            // origin marker
             if (ctrl.hasOrigin && ctrl.vehiclePosition == null)
               Marker(
                 point: _mapController.camera.center,
@@ -414,9 +414,9 @@ class _MainScreenState extends State<MainScreen> {
       height: 40,
       child: Row(
         children: [
-          _mapModeButton('지도', MapMode.osm, Icons.map),
-          _mapModeButton('점유 격자맵', MapMode.occupancyGrid, Icons.grid_on),
-          _mapModeButton('위치 그래프', MapMode.enuPlot, Icons.scatter_plot), // ← 추가
+          _mapModeButton('Map', MapMode.osm, Icons.map),
+          _mapModeButton('Occupancy Grid', MapMode.occupancyGrid, Icons.grid_on),
+          _mapModeButton('ENU Plot', MapMode.enuPlot, Icons.scatter_plot),
         ],
       ),
     );
@@ -476,7 +476,7 @@ class _MainScreenState extends State<MainScreen> {
 
     return Stack(
       children: [
-        // 좌측 상단: 온라인/오프라인 상태
+        // top-left: online/offline status
         if (connectivity.checked)
           Positioned(
             top: 16,
@@ -506,7 +506,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ),
-        // 좌측 하단: 카메라 영상 + 텍스트 오버레이
+        // bottom-left: camera video + text overlay
         Positioned(
           bottom: 16,
           left: 16,
@@ -514,7 +514,7 @@ class _MainScreenState extends State<MainScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 카메라 영상 (토글 가능)
+              // camera video (togglable)
               if (_showCamera)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
@@ -525,7 +525,7 @@ class _MainScreenState extends State<MainScreen> {
                     onClose: () => setState(() => _showCamera = false),
                   ),
                 ),
-              // 기존 텍스트 오버레이
+              // text overlay
               if (_isSettingOrigin)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -573,7 +573,7 @@ class _MainScreenState extends State<MainScreen> {
             ],
           ),
         ),
-        // 카메라 숨김 상태일 때 복원 버튼
+        // restore button when camera is hidden
         if (!_showCamera)
           Positioned(
             bottom: 50,
@@ -594,7 +594,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
           ),
-        // 우측 하단 Zoom 표시
+        // bottom-right zoom display
         Positioned(
           bottom: 16,
           right: 16,
@@ -614,7 +614,7 @@ class _MainScreenState extends State<MainScreen> {
             ),
           ),
         ),
-        // 우측 상단 GPS 표시
+        // top-right GPS display
         if (ctrl.vehiclePosition != null)
           Positioned(
             top: 16,
@@ -660,7 +660,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   double _yawToMapAngle(double yawDeg) {
-    // yaw: 북쪽 기준 시계방향 [deg] → 지도 회전각 [rad]
+    // yaw: clockwise from north [deg] → map rotation angle [rad]
     return -yawDeg * 3.14159265 / 180.0;
   }
 

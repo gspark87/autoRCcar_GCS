@@ -1,9 +1,9 @@
 // lib/screens/widgets/enu_plot_view.dart
 //
-// PyQt pyqtgraph Position 그래프의 Flutter 버전.
-// ENU(East/North) 좌표 격자에 현재 차량 위치/헤딩, 궤적, waypoint, spline 표시.
-// 차량을 중심으로 follow하며, 마우스 휠로 확대/축소.
-// 좌클릭: waypoint 추가 / 우클릭: 가까운 waypoint 삭제
+// Flutter port of the PyQt pyqtgraph position graph.
+// displays current vehicle position/heading, trajectory, waypoints, and spline on an ENU (East/North) grid.
+// follows the vehicle at center; supports zoom via mouse wheel.
+// left-click: add waypoint / right-click: remove nearest waypoint
 
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -27,13 +27,13 @@ class _EnuPlotViewState extends State<EnuPlotView> {
     });
   }
 
-  /// 화면 좌표 -> ENU(east, north) 역변환
+  /// convert screen coordinates to ENU (east, north)
   Offset _screenToEnu(
       Offset localPos, Size size, double centerEast, double centerNorth) {
     final cx = size.width / 2;
     final cy = size.height / 2;
     final dx = localPos.dx - cx;
-    final dy = cy - localPos.dy; // 화면 y 반전 (북쪽이 위)
+    final dy = cy - localPos.dy; // invert screen y so north is up
     final east = centerEast + dx / _scale;
     final north = centerNorth + dy / _scale;
     return Offset(east, north);
@@ -91,7 +91,7 @@ class _EnuPlotViewState extends State<EnuPlotView> {
             ),
           ),
 
-          // 줌 컨트롤
+          // zoom controls
           Positioned(
             top: 16,
             right: 16,
@@ -104,7 +104,7 @@ class _EnuPlotViewState extends State<EnuPlotView> {
             ),
           ),
 
-          // 현재 위치 / waypoint 정보
+          // current position / waypoint info
           Positioned(
             bottom: 16,
             left: 16,
@@ -178,7 +178,7 @@ class _EnuGridPainter extends CustomPainter {
     required this.splineENU,
   });
 
-  /// ENU(east, north) -> 화면 좌표 (차량을 화면 중심에 고정, 북쪽이 위)
+  /// convert ENU (east, north) to screen coordinates (vehicle fixed at center, north up)
   Offset _toScreen(double east, double north, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
@@ -194,7 +194,7 @@ class _EnuGridPainter extends CustomPainter {
       Paint()..color = const Color(0xFF1A1A2E),
     );
 
-    // ── 격자 간격 자동 조정 (40~160px 사이가 되도록) ──────────
+    // ── auto-adjust grid spacing to stay between 40~160 px ──────────
     double gridStepM = 1.0;
     double pxPerGrid = scale * gridStepM;
     while (pxPerGrid < 40) {
@@ -237,7 +237,7 @@ class _EnuGridPainter extends CustomPainter {
           Colors.white38, 9);
     }
 
-    // ── 궤적 ──────────────────────────────────────────────
+    // ── trajectory ──────────────────────────────────────────────
     if (trajectory.length >= 2) {
       final path = Path();
       final first = _toScreen(trajectory[0].$1, trajectory[0].$2, size);
@@ -255,7 +255,7 @@ class _EnuGridPainter extends CustomPainter {
       );
     }
 
-    // ── Waypoint 연결선 ──────────────────────────────────
+    // ── waypoint connection lines ──────────────────────────────────
     if (waypoints.length >= 2) {
       final path = Path();
       final first = _toScreen(waypoints[0].$1, waypoints[0].$2, size);
@@ -273,7 +273,7 @@ class _EnuGridPainter extends CustomPainter {
       );
     }
 
-    // ── Spline 경로 ───────────────────────────────────────
+    // ── spline path ───────────────────────────────────────
     if (splineENU.length >= 2) {
       final path = Path();
       final first = _toScreen(splineENU[0].$1, splineENU[0].$2, size);
@@ -291,7 +291,7 @@ class _EnuGridPainter extends CustomPainter {
       );
     }
 
-    // ── Waypoint 마커 ─────────────────────────────────────
+    // ── waypoint markers ─────────────────────────────────────
     for (int i = 0; i < waypoints.length; i++) {
       final p = _toScreen(waypoints[i].$1, waypoints[i].$2, size);
       canvas.drawCircle(p, 10, Paint()..color = Colors.white.withOpacity(0.9));
@@ -306,11 +306,11 @@ class _EnuGridPainter extends CustomPainter {
       _drawText(canvas, '${i + 1}', p - const Offset(3, 5), Colors.black, 10);
     }
 
-    // ── 차량 마커 (화면 중심, yaw 방향) ───────────────────
+    // ── vehicle marker (screen center, yaw direction) ───────────────────
     final vehiclePos = _toScreen(centerEast, centerNorth, size);
     canvas.save();
     canvas.translate(vehiclePos.dx, vehiclePos.dy);
-    canvas.rotate(yawDeg * pi / 180.0); // 0°=북쪽(위), 시계방향
+    canvas.rotate(yawDeg * pi / 180.0); // 0°=north (up), clockwise
 
     final arrow = Path();
     arrow.moveTo(0, -10);
@@ -328,7 +328,7 @@ class _EnuGridPainter extends CustomPainter {
     );
     canvas.restore();
 
-    // ── 축 레이블 (E / N) ──────────────────────────────────
+    // ── axis labels (E / N) ──────────────────────────────────
     final origin = _toScreen(0, 0, size);
     _drawText(canvas, 'E', Offset(size.width - 18, origin.dy - 16),
         Colors.cyanAccent, 13);

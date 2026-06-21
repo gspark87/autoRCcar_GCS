@@ -1,5 +1,5 @@
 // lib/models/system_status.dart
-// /util/system_status (std_msgs/String, JSON) 에 대응
+// corresponds to /util/system_status (std_msgs/String, JSON)
 
 class SystemStatus {
   final double cpuPercent;
@@ -22,7 +22,7 @@ class SystemStatus {
     this.tempCelsius = 0,
   });
 
-  /// 데이터 미수신 상태 여부 (초기값)
+  /// whether data has not yet been received (initial state)
   bool get isEmpty => memTotalMb == 0 && diskTotalGb == 0;
 
   factory SystemStatus.fromJson(Map<String, dynamic> json) {

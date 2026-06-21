@@ -38,7 +38,7 @@ class NavStatusPanel extends StatelessWidget {
           const SizedBox(height: 12),
           _divider(),
           const SizedBox(height: 8),
-          // Origin 표시
+          // show origin
           if (ctrl.hasOrigin) ...[
             _sectionTitle('ORIGIN (ECEF→LLH)'),
             const SizedBox(height: 6),
@@ -46,7 +46,7 @@ class NavStatusPanel extends StatelessWidget {
             _gpsRow('Lon', ctrl.originLonDeg ?? 0),
             const SizedBox(height: 8),
           ],
-          // 차량 GPS 위치 표시
+          // show vehicle GPS position
           // if (ctrl.vehiclePosition != null) ...[
           //   _sectionTitle('GPS POSITION'),
           //   const SizedBox(height: 6),
@@ -115,7 +115,7 @@ Widget _navRow(String label, double value, Color color) {
           ),
         ),
         SizedBox(
-          width: 70, // 원하는 너비로 조정
+          width: 70,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(

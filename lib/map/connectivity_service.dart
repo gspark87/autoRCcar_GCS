@@ -1,8 +1,8 @@
 // lib/map/connectivity_service.dart
 //
-// OSM 타일 서버 접속 가능 여부를 주기적으로 확인하고 캐싱.
-// HybridTileProvider가 매 타일마다 타임아웃을 기다리지 않도록
-// 미리 온라인/오프라인 상태를 판단해 둠.
+// periodically checks and caches OSM tile server reachability.
+// pre-determines online/offline status so HybridTileProvider does not
+// wait for a timeout on every tile request.
 
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -13,7 +13,7 @@ class ConnectivityService extends ChangeNotifier {
   static const _checkInterval = Duration(seconds: 15);
   static const _checkTimeout = Duration(seconds: 2);
 
-  bool _isOnline = true; // 첫 체크 전까지는 온라인으로 가정
+  bool _isOnline = true; // assume online until first check completes
   bool _checked = false;
   Timer? _timer;
 
@@ -41,7 +41,7 @@ class ConnectivityService extends ChangeNotifier {
     }
   }
 
-  /// 즉시 재확인 (예: 사용자가 "재시도" 버튼 눌렀을 때)
+  /// immediately re-check (e.g. when the user presses a retry button)
   Future<void> recheck() => _check();
 
   @override

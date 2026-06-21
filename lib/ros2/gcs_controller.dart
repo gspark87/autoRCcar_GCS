@@ -15,47 +15,47 @@ import '../config/process_definitions.dart';
 class GcsController extends ChangeNotifier {
   final RosbridgeService _ros;
 
-  // ── Nav 상태 ───────────────────────────────────────────
+  // ── nav state ───────────────────────────────────────────
   NavState? navState;
   double rollDeg = 0, pitchDeg = 0, yawDeg = 0;
 
-  // ── 모드 ────────────────────────────────────────────────
+  // ── mode ────────────────────────────────────────────────
   bool isTeleop = false;
  
   // ── Control Command ────────────────────────────────
   ControlCommand controlCommand = const ControlCommand();
 
   // ── PWM Command ────────────────────────────────────
-  ControlCommand pwmCommand = const ControlCommand(); // ← 추가
+  ControlCommand pwmCommand = const ControlCommand();
 
-  // ── 지도 원점 (LLH rad) ─────────────────────────────────
-  // nav_topic의 origin (ECEF) 첫 수신 시 자동 설정
+  // ── map origin (LLH rad) ─────────────────────────────────
+  // automatically set upon first reception of nav_topic origin (ECEF)
   List<double>? _originLLH;
   bool get hasOrigin => _originLLH != null;
 
-  // origin의 위경도 (표시용)
+  // origin latitude/longitude (for display)
   double? originLatDeg;
   double? originLonDeg;
 
-  // ── ENU 궤적 (E, N) - 위치 그래프용 ─────────────────────
+  // ── ENU trajectory (E, N) - for position graph ─────────────────────
   List<(double, double)> enuTrajectory = [];
 
   Function(LatLng)? onOriginSet;
 
-  // ── 차량 위치 (지도) ─────────────────────────────────────
+  // ── vehicle position (map) ─────────────────────────────────────
   LatLng? vehiclePosition;
   List<LatLng> trajectory = [];
 
   // ── Waypoints ───────────────────────────────────────────
   List<WaypointLLH> waypoints = [];
 
-  // ── Spline 경로 ─────────────────────────────────────────
+  // ── spline path ─────────────────────────────────────────
   List<LatLng> splinePath = [];
 
-  // ── Spline 경로 (ENU) - 위치 그래프용 ────────────────────
+  // ── spline path (ENU) - for position graph ────────────────────
   List<(double, double)> splineENU = [];
 
-  // ── 연결 상태 ────────────────────────────────────────────
+  // ── connection state ────────────────────────────────────────────
   ConnectionState get connectionState => _ros.state;
 
   GcsController({String host = 'localhost', int port = 9090})
@@ -70,10 +70,10 @@ class GcsController extends ChangeNotifier {
     _ros.onSystemStatus = _onSystemStatus;
   }
 
-  // ── 프로세스 상태 (RUN 탭) ───────────────────────────────
+  // ── process status (RUN tab) ───────────────────────────────
   Map<String, String> processStatus = {};
 
-  // ── 시스템 상태 (TBD/SYSTEM 탭) ──────────────────────────
+  // ── system status (SYSTEM tab) ──────────────────────────
   SystemStatus systemStatus = const SystemStatus();
 
   // ── Occupancy Grid ──────────────────────────────────
@@ -88,7 +88,7 @@ class GcsController extends ChangeNotifier {
   void startProcess(String name) => _ros.publishProcessCommand(name, 'start');
   void stopProcess(String name) => _ros.publishProcessCommand(name, 'stop');
 
-  // ── ROS 연결 ─────────────────────────────────────────────
+  // ── ROS connection ─────────────────────────────────────────────
   Future<void> connect(String host, int port) async {
     _ros.updateAddress(host, port);
     await _ros.connect();
@@ -99,18 +99,18 @@ class GcsController extends ChangeNotifier {
   void enableOccupancyGrid() => _ros.subscribeOccupancyGrid();
   void disableOccupancyGrid() => _ros.unsubscribeOccupancyGrid();
 
-  // ── 카메라 스트림 ─────────────────────────────────────────
+  // ── camera stream ─────────────────────────────────────────
   Stream<Uint8List> get cameraStream => _ros.cameraStream;
 
   void enableCamera({String topic = '/camera/image_raw/compressed'}) =>
       _ros.subscribeCamera(topic: topic);
   void disableCamera() => _ros.unsubscribeCamera();
 
-  // ── Nav 콜백 ─────────────────────────────────────────────
+  // ── nav callback ─────────────────────────────────────────────
   void _onNavState(NavState msg) {
     navState = msg;
 
-    // Euler 변환 (w,x,y,z 순서)
+    // convert quaternion to Euler angles (w,x,y,z order)
     final euler = quat2euler([
       msg.quaternion.w,
       msg.quaternion.x,
@@ -121,14 +121,14 @@ class GcsController extends ChangeNotifier {
     pitchDeg = rad2deg(euler[1]);
     yawDeg = rad2deg(euler[2]);
 
-    // ── Origin 자동 설정 ──────────────────────────────────
-    // nav_topic의 origin (ECEF XYZ) → LLH 변환
-    // ECEF가 (0,0,0)이 아닌 경우에만 유효한 값으로 판단
+    // ── auto origin setup ──────────────────────────────────
+    // convert nav_topic origin (ECEF XYZ) → LLH
+    // treat as valid only when ECEF is not (0,0,0)
     final ecef = [msg.origin.x, msg.origin.y, msg.origin.z];
     final ecefNorm = ecef[0] * ecef[0] + ecef[1] * ecef[1] + ecef[2] * ecef[2];
 
     if (_originLLH == null && ecefNorm > 1e6) {
-      // ECEF → LLH 변환
+      // convert ECEF → LLH
       final llh = xyz2llh(ecef);
       _originLLH = llh;
       originLatDeg = rad2deg(llh[0]);
@@ -136,13 +136,13 @@ class GcsController extends ChangeNotifier {
       onOriginSet?.call(LatLng(originLatDeg!, originLonDeg!));
     }
 
-    // ── 차량 위치 업데이트 ────────────────────────────────
+    // ── update vehicle position ────────────────────────────────
     if (_originLLH != null) {
       final enu = [msg.position.x, msg.position.y, msg.position.z];
       final llh = enu2llh(enu, _originLLH!);
       vehiclePosition = LatLng(rad2deg(llh[0]), rad2deg(llh[1]));
       trajectory.add(vehiclePosition!);
-      // ── ENU 궤적 누적 ────────────────────────────────────
+      // ── accumulate ENU trajectory ────────────────────────────────
       enuTrajectory.add((msg.position.x, msg.position.y));
     }
 
@@ -186,7 +186,7 @@ class GcsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── 원점 수동 설정 (지도 클릭) ────────────────────────────
+  // ── manual origin setup (map click) ────────────────────────────
   void setOrigin(LatLng latLng, {double altitude = 0}) {
     _originLLH = [
       deg2rad(latLng.latitude),
@@ -205,7 +205,7 @@ class GcsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Waypoint 관리 ─────────────────────────────────────────
+  // ── waypoint management ─────────────────────────────────────────
   void addWaypoint(LatLng latLng) {
     double ex = 0, ey = 0;
     if (_originLLH != null) {
@@ -227,7 +227,7 @@ class GcsController extends ChangeNotifier {
     }
   }
 
-  /// 위치 그래프(ENU)에서 직접 좌표로 waypoint 추가
+  /// add waypoint by direct coordinates from the ENU position graph
   void addWaypointENU(double east, double north) {
     LatLng latLng;
     if (_originLLH != null) {
@@ -241,7 +241,7 @@ class GcsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// (east, north) 근처의 waypoint 삭제 (thresholdM 이내)
+  /// remove waypoint near (east, north) within thresholdM
   void removeWaypointNearENU(double east, double north, double thresholdM) {
     if (waypoints.isEmpty) return;
     int closestIdx = -1;
@@ -269,7 +269,7 @@ class GcsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Spline 계산 ───────────────────────────────────────────
+  // ── spline computation ───────────────────────────────────────────
   void _updateSpline() {
     if (waypoints.length < 2) {
       splinePath.clear();
@@ -297,7 +297,7 @@ class GcsController extends ChangeNotifier {
     }
   }
 
-  // ── Teleop 제어값 ─────────────────────────────────────
+  // ── teleop control values ─────────────────────────────────────
   double teleopSpeed = 0.0;
   double teleopSteer = 0.0;
 
@@ -365,11 +365,11 @@ class GcsController extends ChangeNotifier {
     return waypoints.map((w) => '${w.x} ${w.y}').join('\n');
   }
 
-  // ── LLM 명령 실행 ─────────────────────────────────────────
-  // LlmService가 반환한 LlmResult.actions를 순서대로 실제 GCS 동작으로 변환.
-  // 고위험 액션(restart_jetson, shutdown_jetson)은 즉시 실행하지 않고
-  // pendingConfirmations로 분리하여 반환한다. 호출 측(LlmPanel)이 사용자
-  // 확인을 받은 뒤 confirmPendingAction()으로 실제 실행해야 한다.
+  // ── LLM action execution ─────────────────────────────────────────
+  // converts LlmResult.actions returned by LlmService into GCS operations in order.
+  // high-risk actions (restart_jetson, shutdown_jetson) are not executed immediately;
+  // they are separated into pendingConfirmations for the caller (LlmPanel) to
+  // execute via confirmPendingAction() after receiving user confirmation.
   LlmExecutionResult executeLlmActions(List<LlmAction> actions) {
     final errors = <String>[];
     final pending = <LlmAction>[];
@@ -386,15 +386,15 @@ class GcsController extends ChangeNotifier {
     return LlmExecutionResult(errors: errors, pendingConfirmations: pending);
   }
 
-  /// LlmPanel에서 확인 다이얼로그를 거친 고위험 액션을 실제로 실행.
-  /// 반환값이 null이 아니면 실행 실패 사유.
+  /// execute a high-risk action that has passed the LlmPanel confirmation dialog.
+  /// returns null on success, or an error message on failure.
   String? confirmPendingAction(LlmAction action) => _runAction(action);
 
-  /// 실제 액션 실행. 성공 시 null, 실패 시 에러 메시지 반환.
+  /// run the actual action. returns null on success, error message on failure.
   String? _runAction(LlmAction action) {
     try {
       switch (action.type) {
-        // ── VEHICLE 탭 ──────────────────────────────────────
+        // ── VEHICLE tab ──────────────────────────────────────
         case 'add_waypoint':
           final x = _asDouble(action.params['x']);
           final y = _asDouble(action.params['y']);
@@ -422,7 +422,7 @@ class GcsController extends ChangeNotifier {
           clearAll();
           return null;
 
-        // ── MANUAL 탭 (teleop 모드에서만 유효한 동작은 가드 적용) ──
+        // ── MANUAL tab (actions valid only in teleop mode are guarded) ──
         case 'teleop_mode':
           // mode: 0=STOP, 1=TELEOP, 2=AUTO
           final mode = action.params['mode'];
@@ -465,7 +465,7 @@ class GcsController extends ChangeNotifier {
           sendSteerReset();
           return null;
 
-        // ── RUN 탭 (id는 kValidProcessIds 화이트리스트로 검증) ──
+        // ── RUN tab (id is validated against the kValidProcessIds whitelist) ──
         case 'start_process':
           final id = action.params['id'] as String?;
           if (id == null || !kValidProcessIds.contains(id)) {
@@ -482,8 +482,8 @@ class GcsController extends ChangeNotifier {
           stopProcess(id);
           return null;
 
-        // ── SYSTEM 탭 (고위험: executeLlmActions에서 미리 분리되므로
-        //    여기 도달하는 경우는 confirmPendingAction을 통한 호출뿐) ──
+        // ── SYSTEM tab (high-risk: pre-separated in executeLlmActions,
+        //    so reaching here only happens via confirmPendingAction) ──
         case 'restart_jetson':
           restartJetson();
           return null;
@@ -506,7 +506,7 @@ class GcsController extends ChangeNotifier {
     return null;
   }
 
-  /// LLM 시스템 프롬프트에 현재 위치 컨텍스트를 제공하기 위한 현재 ENU 위치.
+  /// current ENU position for providing location context to the LLM system prompt.
   double get currentEast => navState?.position.x ?? 0.0;
   double get currentNorth => navState?.position.y ?? 0.0;
 

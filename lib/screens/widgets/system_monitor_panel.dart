@@ -1,8 +1,8 @@
 // lib/screens/widgets/system_monitor_panel.dart
 //
-// Jetson 시스템 상태(CPU/메모리/디스크/온도) 표시 + 재부팅/종료 제어.
-// 차량 측 autorccar_util/process_manager_node 의
-// /util/system_status (subscribe), /util/system_command (publish) 로 통신.
+// displays Jetson system status (CPU/memory/disk/temperature) + restart/shutdown controls.
+// communicates with autorccar_util/process_manager_node on the vehicle via
+// /util/system_status (subscribe) and /util/system_command (publish).
 
 import 'package:flutter/material.dart';
 import '../../ros2/gcs_controller.dart';
@@ -90,7 +90,7 @@ class SystemMonitorPanel extends StatelessWidget {
     );
   }
 
-  // ── 레벨에 따른 색상 (0~60: 초록, 60~85: 주황, 85+: 빨강) ──
+  // ── color by level (0~60: green, 60~85: orange, 85+: red) ──
   Color _levelColor(double percent) {
     if (percent < 60) return Colors.greenAccent;
     if (percent < 85) return Colors.orangeAccent;

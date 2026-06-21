@@ -1,5 +1,5 @@
 // lib/math/user_geometry.dart
-// user_geometry.py 의 Dart 포팅
+// Dart port of user_geometry.py
 
 import 'dart:math';
 
@@ -31,7 +31,7 @@ List<double> quat2euler(List<double> quat) {
 const double _aa = 6378317.0;
 const double _ee = 0.0818191908426;
 
-/// LLH (rad) → NED [m], origin도 rad
+/// converts LLH (rad) to NED [m]; origin in rad
 List<double> llh2ned(List<double> llh, List<double> llhOri) {
   double lat = llh[0];
   double lon = llh[1];
@@ -50,7 +50,7 @@ List<double> llh2ned(List<double> llh, List<double> llhOri) {
   return [n, e, d];
 }
 
-/// NED [m] → LLH (rad), origin도 rad
+/// converts NED [m] to LLH (rad); origin in rad
 List<double> ned2llh(List<double> ned, List<double> llhOri) {
   double n = ned[0];
   double e = ned[1];
@@ -69,10 +69,10 @@ List<double> ned2llh(List<double> ned, List<double> llhOri) {
   return [lat, lon, hei];
 }
 
-/// ENU [m] → LLH (rad), origin은 rad
+/// converts ENU [m] to LLH (rad); origin in rad
 /// ENU = (East, North, Up), NED = (North, East, Down)
 List<double> enu2llh(List<double> enu, List<double> llhOri) {
-  // ENU → NED 변환
+  // convert ENU to NED
   List<double> ned = [enu[1], enu[0], -enu[2]];
   return ned2llh(ned, llhOri);
 }
@@ -91,7 +91,7 @@ double deg2rad(double deg) => deg * pi / 180.0;
 double rad2deg(double rad) => rad * 180.0 / pi;
 
 /// ECEF XYZ [m] → LLH (lat/lon rad, height m)
-/// user_geometry.py xyz2llh 포팅
+/// Dart port of xyz2llh from user_geometry.py
 List<double> xyz2llh(List<double> xyz) {
   double x = xyz[0];
   double y = xyz[1];

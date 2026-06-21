@@ -1,5 +1,5 @@
 // lib/math/cubic_spline.dart
-// cubic_spline.py 의 Dart 포팅
+// Dart port of cubic_spline.py
 
 import 'dart:math';
 

@@ -2,7 +2,7 @@
 
 import 'package:latlong2/latlong.dart';
 
-/// ENU 좌표 Waypoint (내부 계산용)
+/// ENU coordinate waypoint (used internally for computation)
 class WaypointENU {
   double x; // East [m]
   double y; // North [m]
@@ -10,7 +10,7 @@ class WaypointENU {
   WaypointENU({required this.x, required this.y});
 }
 
-/// 지도 표시용 Waypoint (위경도)
+/// waypoint for map display (lat/lng)
 class WaypointLLH {
   final LatLng latLng;
   final double x; // ENU East

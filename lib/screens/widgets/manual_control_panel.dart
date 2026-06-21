@@ -15,14 +15,14 @@ class ManualControlPanel extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // ── 차량 탑뷰 ─────────────────────────────────────
+          // ── vehicle top view ───────────────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 좌측: 차량 탑뷰 고정 너비
+              // left: vehicle top view (fixed width)
               SizedBox(
                 width: 260,
-                height: 180, // ← 고정 높이
+                height: 180,
                 child: CustomPaint(
                   painter: CarTopViewPainter(
                     speed: ctrl.pwmCommand.speed,
@@ -31,9 +31,9 @@ class ManualControlPanel extends StatelessWidget {
                 ),
               ),
               // const SizedBox(width: 8),
-              // 우측: PWM 값 고정 너비
+              // right: PWM values (fixed width)
               SizedBox(
-                width: 90, // ← 원하는 너비로 조정
+                width: 90,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -48,7 +48,7 @@ class ManualControlPanel extends StatelessWidget {
           ),
           const SizedBox(height: 70),
 
-          // ── 모드 전환 버튼 3개 ─────────────────────────────
+          // ── mode buttons (3) ──────────────────────────────────────
           Row(
             children: [
               Expanded(child: _modeButton('STOP', Icons.stop_circle, Colors.redAccent, () => ctrl.sendTeleopCommand(0))),
@@ -60,11 +60,11 @@ class ManualControlPanel extends StatelessWidget {
           ),
           const SizedBox(height: 40),
 
-          // ── 방향키 ────────────────────────────────────────
+          // ── d-pad ─────────────────────────────────────────────────
           _buildDpad(),
-          const SizedBox(height: 40), // ← 추가
+          const SizedBox(height: 40),
 
-          // ── 기능 버튼 2개 (방향키 아래) ───────────────────
+          // ── function buttons below d-pad ──────────────────────────
           Row(
             children: [
               Expanded(
@@ -94,14 +94,14 @@ class ManualControlPanel extends StatelessWidget {
   Widget _buildDpad() {
     return Column(
       children: [
-        // 위
+        // up
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             _arrowButton(Icons.keyboard_arrow_up, 'UP', () => ctrl.teleopSpeedUp()),
           ],
         ),
-        // 좌 / 빈칸 / 우
+        // left / center gap / right
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -112,7 +112,7 @@ class ManualControlPanel extends StatelessWidget {
             _arrowButton(Icons.keyboard_arrow_right, 'RIGHT', () => ctrl.teleopSteerRight()),
           ],
         ),
-        // 아래
+        // down
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -232,7 +232,7 @@ class ManualControlPanel extends StatelessWidget {
   }
 }
 
-// ── 차량 탑뷰 CustomPainter ───────────────────────────────────
+// ── vehicle top view CustomPainter ──────────────────────────────────
 class CarTopViewPainter extends CustomPainter {
   final double speed;
   final double steeringAngle; // deg
@@ -246,12 +246,12 @@ class CarTopViewPainter extends CustomPainter {
     final cx = w / 2;
     final cy = h / 2;
 
-    // 차체 비율
+    // body proportions
     final carW = w * 0.28;
     final carH = h * 0.75;
     final wheelW = carW * 0.22;
     final wheelH = carH * 0.22;
-    final steerDeg = (steeringAngle - 87) * (45.0 / 77.0); // 87 중립, 최대 ±45도로 매핑
+    final steerDeg = (steeringAngle - 87) * (45.0 / 77.0); // neutral at 87, mapped to ±45°
     final steerRad = steerDeg * pi / 180.0;
 
     final bodyPaint = Paint()
@@ -276,7 +276,7 @@ class CarTopViewPainter extends CustomPainter {
       ..color = Colors.cyanAccent.shade700
       ..style = PaintingStyle.fill;
 
-    // ── 차체 ──────────────────────────────────────────────
+    // ── body ─────────────────────────────────────────────────────
     final bodyRect = RRect.fromRectAndRadius(
       Rect.fromCenter(center: Offset(cx, cy), width: carW, height: carH),
       const Radius.circular(6),
@@ -284,7 +284,7 @@ class CarTopViewPainter extends CustomPainter {
     canvas.drawRRect(bodyRect, bodyPaint);
     canvas.drawRRect(bodyRect, borderPaint);
 
-    // 전면 표시선
+    // front indicator line
     final frontLinePaint = Paint()
       ..color = Colors.cyanAccent.withOpacity(0.6)
       ..strokeWidth = 2.0;
@@ -294,21 +294,21 @@ class CarTopViewPainter extends CustomPainter {
       frontLinePaint,
     );
 
-    // ── 바퀴 위치 ─────────────────────────────────────────
+    // ── wheel positions ──────────────────────────────────────────
     final frontY = cy - carH * 0.28;
     final rearY = cy + carH * 0.28;
     final leftX = cx - carW * 0.62;
     final rightX = cx + carW * 0.62;
 
-    // 뒷바퀴 (고정)
+    // rear wheels (fixed)
     _drawWheel(canvas, Offset(leftX, rearY), wheelW, wheelH, 0, wheelPaint, wheelBorderPaint);
     _drawWheel(canvas, Offset(rightX, rearY), wheelW, wheelH, 0, wheelPaint, wheelBorderPaint);
 
-    // 앞바퀴 (조향각 적용)
+    // front wheels (with steering angle applied)
     _drawWheel(canvas, Offset(leftX, frontY), wheelW, wheelH, steerRad, steerWheelPaint, wheelBorderPaint);
     _drawWheel(canvas, Offset(rightX, frontY), wheelW, wheelH, steerRad, steerWheelPaint, wheelBorderPaint);
 
-    // ── Steering angle 텍스트 (앞바퀴 위) ─────────────────
+    // ── steering angle text (above front wheels) ─────────────────
     _drawText(
       canvas,
       '${steeringAngle.toInt()}',
@@ -317,7 +317,7 @@ class CarTopViewPainter extends CustomPainter {
       14,
     );
 
-    // ── Speed 텍스트 (차체 중앙) ──────────────────────────
+    // ── speed text (body center) ──────────────────────────────────
     _drawText(
       canvas,
       '${speed.toInt()}',

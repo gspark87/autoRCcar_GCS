@@ -1,9 +1,9 @@
 // lib/llm/llm_service.dart
 //
-// GCS에서 직접 Claude / OpenAI API를 호출하여 자연어 명령을
-// 정해진 JSON 액션 스키마로 변환받는다.
+// calls Claude / OpenAI API directly from GCS to convert natural language commands
+// into a defined JSON action schema.
 //
-// 응답 스키마 (시스템 프롬프트로 강제):
+// response schema (enforced via system prompt):
 // {
 //   "actions": [
 //     {"action": "add_waypoint", "x": 3.0, "y": 0.0},
@@ -17,11 +17,11 @@
 //     {"action": "stop_process", "id": "ins_gnss"},
 //     {"action": "restart_jetson"}, {"action": "shutdown_jetson"}
 //   ],
-//   "message": "사용자에게 보여줄 짧은 설명"
+//   "message": "short description shown to the user"
 // }
-// restart_jetson/shutdown_jetson은 GcsController.executeLlmActions에서
-// 고위험 액션으로 분류되어 즉시 실행되지 않고 LlmPanel의 확인 다이얼로그를
-// 거친 뒤에만 실행된다.
+// restart_jetson/shutdown_jetson are classified as high-risk in
+// GcsController.executeLlmActions and are not executed immediately;
+// they only run after passing the LlmPanel confirmation dialog.
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -32,8 +32,8 @@ class LlmService {
   static const _openAiUrl = 'https://api.openai.com/v1/chat/completions';
   static const _anthropicVersion = '2023-06-01';
 
-  /// 차량 좌표계(ENU, East/North/Up [m])와 현재 yaw, teleop 상태, RUN 탭
-  /// 프로세스 목록을 기준으로 LLM이 정확한 액션을 생성하도록 안내하는 시스템 프롬프트.
+  /// builds the system prompt to guide the LLM in generating accurate actions,
+  /// based on vehicle coordinate system (ENU [m]), current yaw, teleop state, and process list.
   String _buildSystemPrompt({
     required double currentEast,
     required double currentNorth,
